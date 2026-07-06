@@ -142,6 +142,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   <button class="tab" onclick="switchTab(this,'notes')">&#128203; Notes</button>
   <button class="tab" onclick="switchTab(this,'draft')">&#9997; Draft</button>
   <button class="tab" onclick="switchTab(this,'settings')">&#9881; Settings</button>
+  <a href="apply.html" target="_blank" style="display:inline-flex;align-items:center;padding:0 14px;font-size:13px;color:#7ab8f0;text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap">&#128203; New client</a>
 </div>
 <div class="synb ing" id="syn">&#9203; Connecting...</div>
 
@@ -394,13 +395,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
       <a href="https://app.gohighlevel.com" target="_blank" class="btn btn-sm" style="text-decoration:none">&#128279; GHL dashboard</a>
     </div>
   </div>
-
-  <!-- Recent SMS log -->
-  <div class="card">
-    <div style="font-size:14px;font-weight:600;margin-bottom:14px">&#128243; Recent SMS activity</div>
-    <div id="sett-recent-sms" style="font-size:12px;color:#555;text-align:center;padding:1rem">No SMS activity logged yet this session.</div>
-  </div>
-</div>
 
 <div class="section" id="tab-wv">
   <div class="tb">
@@ -2267,8 +2261,6 @@ function renderSettings(){
     }).join('');
   }
 
-  // Recent SMS log
-  renderSMSLog();
 }
 
 function forceSyncNow(){
