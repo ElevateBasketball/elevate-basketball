@@ -1,8 +1,0 @@
-[build]
-  functions = "netlify/functions"
-
-[functions."ghl-scheduled"]
-  schedule = "0 21 * * 3"
-
-[functions."ghl-confirm-reminder"]
-  schedule = "0 10 * * *"
