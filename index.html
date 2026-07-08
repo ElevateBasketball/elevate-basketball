@@ -138,7 +138,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   <button class="tab" onclick="switchTab(this,'pay')">&#128181; Worker Pay</button>
   <button class="tab" onclick="switchTab(this,'inv')">&#129534; Invoicing</button>
   <button class="tab" onclick="switchTab(this,'sum')">&#128203; Summary</button>
-  <button class="tab" onclick="switchTab(this,'wv')">&#128065; Worker view</button>
   <button class="tab" onclick="switchTab(this,'notes')">&#128203; Notes</button>
   <button class="tab" onclick="switchTab(this,'draft')">&#9997; Draft</button>
   <a href="apply.html" target="_blank" style="display:inline-flex;align-items:center;padding:0 14px;font-size:13px;color:#7ab8f0;text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap">&#128203; New client</a>
@@ -396,13 +395,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     </div>
   </div>
 
-<div class="section" id="tab-wv">
-  <div class="tb">
-    <select id="wvf" onchange="renderWV()" style="flex:1;max-width:220px"><option value="all">All workers</option></select>
-    <span style="font-size:12px;color:#999" id="wvlbl"></span>
-  </div>
-  <div id="wvcontent"></div>
-</div>
 
 <!-- SESSION MODAL -->
 <div class="mo" id="mo-sess"><div class="modal">
@@ -748,7 +740,7 @@ function switchTab(btn,name){
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active')});
   btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');
-  if(name==='pay')renderPay();if(name==='wv')renderWV();if(name==='sum')renderSum();
+  if(name==='pay')renderPay();if(name==='sum')renderSum();
   if(name==='notes')renderNotes();if(name==='draft')renderDraft();
   if(name==='settings')renderSettings();
   if(name==='inv'){
@@ -960,15 +952,13 @@ function renderCal(){
       var mins=Math.round((y/pxm+tstart)/30)*30;
       var hh=Math.floor(mins/60);var mm=mins%60;
       if(hh<7||hh>17)return;
-      var timeStr=String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
-      openSessPanel(dayVal,hoop);
-      var stEl=document.getElementById('sp-st');
-      var etEl=document.getElementById('sp-et');
-      if(stEl)stEl.value=timeStr;
+      openAS(dayVal,hoop);
+      var stEl=document.getElementById('smst');
+      var etEl=document.getElementById('smet');
+      if(stEl)stEl.value=hh+':'+String(mm).padStart(2,'0');
       var endMins=mins+60;var eh=Math.floor(endMins/60);var em=endMins%60;
-      var endStr=String(eh).padStart(2,'0')+':'+String(em).padStart(2,'0');
-      if(etEl){for(var i=0;i<etEl.options.length;i++){if(etEl.options[i].value===endStr){etEl.selectedIndex=i;break;}}}
-      spRebuild();
+      if(etEl)etEl.value=eh+':'+String(em).padStart(2,'0');
+      refHP();
     }
   };
 }
@@ -1474,27 +1464,6 @@ function saveSessWithStatus(forcedStatus){
   schedule.sessions.push(obj);
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);}});
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
-
-
-function _runQueue(){if(!_sendQueue.length){_sendRunning=false;return;}_sendRunning=true;var item=_sendQueue.shift();
-    fetch('/api/send-email',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({to:[item.email],subject:item.subject,html:item.html})
-    }).catch(function(e){console.warn('Email failed:',e);}).then(function(){setTimeout(_runQueue,1500);});
-  }
-  // Workers + coaches
-  (sess.coaches||[]).concat(sess.workers||[]).forEach(function(wid){
-    var w=workers.find(function(x){return x.id===wid});if(!w||!w.email)return;
-    var role=(sess.coaches||[]).indexOf(wid)>=0?'Coach':'On-court';
-    doSend(w.email,'Elevate — You\'re on the schedule: '+sess.day,makeHtml(w.name,'https://elevate-basketball-elevatebasketball123.vercel.app/worker-view',role));
-  });
-  if(sess.contentWorker){var cw=workers.find(function(x){return x.id===sess.contentWorker});if(cw&&cw.email)doSend(cw.email,'Elevate — You\'re on the schedule: '+sess.day,makeHtml(cw.name,'https://elevate-basketball-elevatebasketball123.vercel.app/worker-view','Filming'));}
-  // Players
-  var playerList=[];
-  if(sess.type==='group'||sess.type==='pro'){
-    (sess.groupPlayers||[]).forEach(function(pid){var p=players.find(function(x){return x.id===pid});if(p&&p.email)playerList.push(p);});
-  } else {
-    var sp=players.find(function(x){return x.name===sess.player});if(sp&&sp.email)playerList.push(sp);
-  }
 }
 
 function renderWorkers(){
@@ -1599,23 +1568,6 @@ function renderSum(){
 }
 
 function copySummary(){var ws=wkSess(wkOff,true);var wd=workers.map(function(w){return Object.assign({},w,{hrs:calcHrs(w.id)})}).filter(function(w){return w.hrs>0});var dates=getWkDates();var lines=['WEEKLY SUMMARY - Week of '+fmtD(dates[0])+' to '+fmtD(dates[5]),'='.repeat(40),'','SESSIONS'];DAYS.forEach(function(day){var ds=ws.filter(function(s){return s.day===day});if(!ds.length)return;lines.push('');lines.push(day);ds.sort(function(a,b){return t2m(a.start)-t2m(b.start)}).forEach(function(s){var cn=(s.coaches||[]).map(function(id){var w=workers.find(function(x){return x.id===id});return w?w.name:''}).filter(Boolean).join(', ');var wn=(s.workers||[]).map(function(id){var w=workers.find(function(x){return x.id===id});return w?w.name:''}).filter(Boolean).join(', ');lines.push('  '+fmtT(s.start)+'-'+fmtT(s.end)+' | '+(s.player||'TBD')+' | Hoop '+s.hoop+(s.location?' | '+s.location:'')+(cn?' | Coaches: '+cn:'')+(wn?' | Workers: '+wn:''));})});lines.push('');lines.push('PAY');wd.forEach(function(w){lines.push('  '+w.name+': '+w.hrs.toFixed(1)+' hrs - $'+Math.round(w.hrs*20))});lines.push('  TOTAL: '+wd.reduce(function(a,w){return a+w.hrs},0).toFixed(1)+' hrs - $'+Math.round(wd.reduce(function(a,w){return a+w.hrs*20},0)));var txt=lines.join('\n');try{navigator.clipboard.writeText(txt).then(function(){var b=event.target;var p=b.textContent;b.textContent='Copied!';setTimeout(function(){b.textContent=p},2000)})}catch(e){alert(txt)}}
-function renderWV(){
-  updLbls();var dates=getWkDates();var filter=document.getElementById('wvf').value;var sel=document.getElementById('wvf');var prev=sel.value;
-  sel.innerHTML='<option value="all">All workers</option>'+workers.map(function(w){return '<option value="'+w.id+'">'+w.name+'</option>'}).join('');sel.value=prev;
-  var list=filter==='all'?workers:workers.filter(function(w){return w.id===filter});
-  var content=document.getElementById('wvcontent');if(!list.length){content.innerHTML='<div class="empty">No workers.</div>';return}
-  content.innerHTML=list.map(function(w){
-    var shifts=wkSess(wkOff).filter(function(s){return (s.coaches||[]).indexOf(w.id)>=0||(s.workers||[]).indexOf(w.id)>=0||s.contentWorker===w.id}).sort(function(a,b){return DAYS.indexOf(a.day)-DAYS.indexOf(b.day)||t2m(a.start)-t2m(b.start)});
-    var hrs=calcHrs(w.id);
-    return '<div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="av" style="width:42px;height:42px;font-size:13px">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:15px;font-weight:500">'+w.name+'</div></div><div style="text-align:right;font-size:13px"><span style="font-weight:500">'+hrs.toFixed(1)+' hrs</span> <span style="color:#60c070;font-weight:500">$'+Math.round(hrs*HOURLY)+'</span></div></div>'
-      +(!shifts.length?'<div style="font-size:13px;color:#666">No shifts this week.</div>':shifts.map(function(s){
-        var di=DAYS.indexOf(s.day);var loc=s.location||schedule.locations[s.day]||'';var dur=((t2m(s.end)-t2m(s.start))/60).toFixed(1);
-        var isCoach=(s.coaches||[]).indexOf(w.id)>=0;
-        return '<div class="shr"><div style="width:95px;flex-shrink:0"><div style="font-size:13px;font-weight:500">'+s.day.slice(0,3)+(di>=0?', '+fmtD(dates[di])+' ':' ')+'</div><div style="font-size:12px;color:#999">'+fmtT(s.start)+' \u2013 '+fmtT(s.end)+'</div></div><div style="flex:1;padding:0 8px"><div style="font-size:13px">'+(s.player||'Session')+(s.type==='group'?' &#128101;':'')+'</div>'+(isCoach?'<span class="bdg" style="background:#0a2d18;color:#60c070;margin-top:2px">Coach</span>':'')+'<div style="font-size:11px;color:#666">'+(s.focus?s.focus:'')+'</div>'+(loc?'<div style="font-size:11px;color:#f0c060">&#128205; '+loc+'</div>':'')+'</div><div style="text-align:right;flex-shrink:0;font-size:12px;color:#999"><div style="font-weight:500">'+dur+' hr</div></div></div>';
-      }).join(''))+'</div>';
-  }).join('');
-}
-
 function openLoc(){document.getElementById('locform').innerHTML=DAYS.map(function(d){return '<div class="fr"><label>'+d+'</label><input type="text" id="lf-'+d+'" value="'+(schedule.locations[d]||'')+'" placeholder="e.g. Main Gym"></div>'}).join('');openMo('mo-loc')}
 function saveLoc(){DAYS.forEach(function(d){schedule.locations[d]=document.getElementById('lf-'+d).value.trim()});queueSave();closeMo('mo-loc');renderCal()}
 
@@ -2105,6 +2057,7 @@ function checkCoachPw(){
 
 // ── NOTES / TO-DO ──────────────────────────────────────
 var notes=[];var eNoteId=null;var notesFilt='all';
+var appSettings={portalUrl:'',hourlyRate:HOURLY,deadlineDay:3,coachPw:COACH_PW,invPw:INV_PW,smsEnabled:false};
 function setNotesFilt(btn,filt){notesFilt=filt;document.querySelectorAll('.notes-filt').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');renderNotes();}
 async function saveNotes(){try{var r=await fetch(SBU+'/rest/v1/state?id=eq.main&select=data',{headers:HDR});var rows=await r.json();var cur={};if(rows&&rows.length&&rows[0].data)cur=rows[0].data;cur.notes=notes;await fetch(SBU+'/rest/v1/state?id=eq.main',{method:'PATCH',headers:Object.assign({},HDR,{'Prefer':'return=minimal'}),body:JSON.stringify({data:cur,updated_at:new Date().toISOString()})});setSyn('ok','✓ Saved');}catch(e){setSyn('err','⚠ Save failed');}}
 function openAN(){eNoteId=null;document.getElementById('note-title').value='';document.getElementById('note-body').value='';document.getElementById('note-type').value='todo';document.getElementById('note-assignee').value='';document.getElementById('note-mtitle').textContent='Add note';document.getElementById('note-del-btn').style.display='none';openMo('mo-note');}
@@ -2210,7 +2163,8 @@ function pushDraftToSchedule(){
 // ── SETTINGS ───────────────────────────────────────────
 function saveSettings(){
   // Read values from form
-    appSettings.portalUrl = document.getElementById('sett-portal-url').value.trim() || appSettings.portalUrl;
+  var portalUrlEl = document.getElementById('sett-portal-url');
+  if(portalUrlEl) appSettings.portalUrl = portalUrlEl.value.trim() || appSettings.portalUrl;
   appSettings.hourlyRate = parseInt(document.getElementById('sett-hourly-rate').value) || 20;
 
   appSettings.deadlineDay = parseInt(document.getElementById('sett-deadline-day').value);
