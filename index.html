@@ -138,7 +138,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   <button class="tab" onclick="switchTab(this,'pay')">&#128181; Worker Pay</button>
   <button class="tab" onclick="switchTab(this,'inv')">&#129534; Invoicing</button>
   <button class="tab" onclick="switchTab(this,'sum')">&#128203; Summary</button>
-  <button class="tab" onclick="switchTab(this,'notes')">&#128203; Notes</button>
   <button class="tab" onclick="switchTab(this,'draft')">&#9997; Draft</button>
   <a href="apply.html" target="_blank" style="display:inline-flex;align-items:center;padding:0 14px;font-size:13px;color:#7ab8f0;text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap">&#128203; New client</a>
   <button class="tab" onclick="switchTab(this,'settings')">&#9881; Settings</button>
@@ -272,52 +271,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     </div>
   </div>
 </div>
-
-<!-- NOTES TAB -->
-<div class="section" id="tab-notes">
-  <div class="tb" style="margin-bottom:1rem">
-    <span style="font-size:15px;font-weight:500;flex:1">Team Notes &amp; To-Dos</span>
-    <button class="btn btn-sm btn-p" onclick="openAN()">+ Add note</button>
-  </div>
-  <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
-    <button class="btn btn-sm notes-filt active" onclick="setNotesFilt(this,'all')">All</button>
-    <button class="btn btn-sm notes-filt" onclick="setNotesFilt(this,'todo')">To-do</button>
-    <button class="btn btn-sm notes-filt" onclick="setNotesFilt(this,'done')">Done</button>
-    <button class="btn btn-sm notes-filt" onclick="setNotesFilt(this,'urgent')">Urgent</button>
-    <button class="btn btn-sm notes-filt" onclick="setNotesFilt(this,'info')">Info</button>
-  </div>
-  <div id="notes-list"></div>
-</div>
-
-<!-- NOTE MODAL -->
-<div class="mo" id="mo-note"><div class="modal">
-  <div class="mtt" id="note-mtitle">Add note</div>
-  <div class="fr"><label>Title</label><input type="text" id="note-title" placeholder="e.g. Fix website login, Call Felix..."></div>
-  <div class="fr"><label>Details</label><textarea id="note-body" rows="3" placeholder="More context, links, etc."></textarea></div>
-  <div class="g2">
-    <div class="fr"><label>Type</label>
-      <select id="note-type">
-        <option value="todo">To-do</option>
-        <option value="urgent">Urgent</option>
-        <option value="info">Info / FYI</option>
-      </select>
-    </div>
-    <div class="fr"><label>Assign to</label>
-      <select id="note-assignee">
-        <option value="">Unassigned</option>
-        <option value="Ray">Ray</option>
-        <option value="Mitch">Mitch</option>
-        <option value="Felix">Felix</option>
-        <option value="Everyone">Everyone</option>
-      </select>
-    </div>
-  </div>
-  <div class="mact">
-    <button class="btn" onclick="closeMo('mo-note')">Cancel</button>
-    <button class="btn btn-d btn-sm" id="note-del-btn" onclick="delNote()" style="display:none">Delete</button>
-    <button class="btn btn-p" onclick="saveNote()">Save</button>
-  </div>
-</div></div>
 
 <!-- DRAFT TAB -->
 <div class="section" id="tab-draft">
@@ -623,7 +576,6 @@ function merge(d){
   if(d.weekOffset!==undefined)wkOff=d.weekOffset;else if(src.weekOffset!==undefined)wkOff=src.weekOffset;
   if(d.payPeriodStatus)schedule.payPeriodStatus=d.payPeriodStatus;else if(src.payPeriodStatus)schedule.payPeriodStatus=src.payPeriodStatus;
   if(Array.isArray(d.cancellations))schedule.cancellations=d.cancellations;else if(Array.isArray(src.cancellations))schedule.cancellations=src.cancellations;
-  if(Array.isArray(d.notes))notes=d.notes;else if(Array.isArray(src.notes))notes=src.notes;
 }
 
 function flattenOld(cur){
@@ -741,7 +693,7 @@ function switchTab(btn,name){
   document.querySelectorAll('.section').forEach(function(s){s.classList.remove('active')});
   btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');
   if(name==='pay')renderPay();if(name==='sum')renderSum();
-  if(name==='notes')renderNotes();if(name==='draft')renderDraft();
+  if(name==='draft')renderDraft();
   if(name==='settings')renderSettings();
   if(name==='inv'){
     if(!invUnlocked){
@@ -2056,47 +2008,7 @@ function checkCoachPw(){
 }
 
 // ── NOTES / TO-DO ──────────────────────────────────────
-var notes=[];var eNoteId=null;var notesFilt='all';
 var appSettings={portalUrl:'',hourlyRate:HOURLY,deadlineDay:3,coachPw:COACH_PW,invPw:INV_PW,smsEnabled:false};
-function setNotesFilt(btn,filt){notesFilt=filt;document.querySelectorAll('.notes-filt').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');renderNotes();}
-async function saveNotes(){try{var r=await fetch(SBU+'/rest/v1/state?id=eq.main&select=data',{headers:HDR});var rows=await r.json();var cur={};if(rows&&rows.length&&rows[0].data)cur=rows[0].data;cur.notes=notes;await fetch(SBU+'/rest/v1/state?id=eq.main',{method:'PATCH',headers:Object.assign({},HDR,{'Prefer':'return=minimal'}),body:JSON.stringify({data:cur,updated_at:new Date().toISOString()})});setSyn('ok','✓ Saved');}catch(e){setSyn('err','⚠ Save failed');}}
-function openAN(){eNoteId=null;document.getElementById('note-title').value='';document.getElementById('note-body').value='';document.getElementById('note-type').value='todo';document.getElementById('note-assignee').value='';document.getElementById('note-mtitle').textContent='Add note';document.getElementById('note-del-btn').style.display='none';openMo('mo-note');}
-function openEN(id){var n=notes.find(function(x){return x.id===id});if(!n)return;eNoteId=id;document.getElementById('note-title').value=n.title||'';document.getElementById('note-body').value=n.body||'';document.getElementById('note-type').value=n.type||'todo';document.getElementById('note-assignee').value=n.assignee||'';document.getElementById('note-mtitle').textContent='Edit note';document.getElementById('note-del-btn').style.display='inline-flex';openMo('mo-note');}
-function saveNote(){var t=document.getElementById('note-title').value.trim();if(!t)return;var obj={id:eNoteId||gid(),title:t,body:document.getElementById('note-body').value.trim(),type:document.getElementById('note-type').value,assignee:document.getElementById('note-assignee').value,done:eNoteId?(notes.find(function(x){return x.id===eNoteId})||{}).done||false:false,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};if(eNoteId){var i=notes.findIndex(function(x){return x.id===eNoteId});if(i>=0)notes[i]=obj;}else notes.unshift(obj);saveNotes();closeMo('mo-note');renderNotes();}
-function delNote(){if(!eNoteId)return;if(!confirm('Delete this note?'))return;notes=notes.filter(function(x){return x.id!==eNoteId});saveNotes();closeMo('mo-note');renderNotes();}
-function toggleNoteDone(id){var n=notes.find(function(x){return x.id===id});if(!n)return;n.done=!n.done;n.updatedAt=new Date().toISOString();saveNotes();renderNotes();}
-function renderNotes(){
-  var el=document.getElementById('notes-list');if(!el)return;
-  var visible=notes.filter(function(n){
-    if(notesFilt==='done')return n.done;
-    if(notesFilt==='todo')return !n.done&&n.type==='todo';
-    if(notesFilt==='urgent')return !n.done&&n.type==='urgent';
-    if(notesFilt==='info')return n.type==='info';
-    return true;
-  });
-  if(!visible.length){el.innerHTML='<div style="text-align:center;padding:2rem;color:#555">No notes yet.</div>';return;}
-  var tc={todo:'#7ab8f0',urgent:'#f07070',info:'#f0c060'};
-  var tl={todo:'To-do',urgent:'Urgent',info:'Info'};
-  var ti={todo:'&#9744;',urgent:'&#128308;',info:'&#128161;'};
-  el.innerHTML=visible.map(function(n){
-    var c=tc[n.type]||'#999';var l=tl[n.type]||n.type;var ic=ti[n.type]||'';
-    var ds=n.updatedAt?new Date(n.updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
-    var nid=n.id;
-    return '<div style="background:#1a1a1a;border:1px solid '+(n.type==='urgent'&&!n.done?'#7a1a1a':'#2e2e2e')+';border-radius:10px;padding:12px 14px;margin-bottom:8px;opacity:'+(n.done?'0.5':'1')+';cursor:pointer" onclick="openEN(\''+(nid)+'\')">'
-      +'<div style="display:flex;align-items:flex-start;gap:10px">'
-      +'<div onclick="event.stopPropagation();toggleNoteDone(\''+(nid)+'\')" style="margin-top:2px;font-size:18px;cursor:pointer;flex-shrink:0">'+(n.done?'&#9745;':ic)+'</div>'
-      +'<div style="flex:1">'
-      +'<div style="font-size:14px;font-weight:500;color:'+(n.done?'#666':'#e8e8e8')+';text-decoration:'+(n.done?'line-through':'none')+'">'+(n.title)+'</div>'
-      +(n.body?'<div style="font-size:12px;color:#666;margin-top:3px">'+(n.body)+'</div>':'')
-      +'<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">'
-      +'<span style="font-size:10px;font-weight:600;color:'+c+';background:'+c+'1a;padding:2px 7px;border-radius:4px">'+l+'</span>'
-      +(n.assignee?'<span style="font-size:11px;color:#999">'+n.assignee+'</span>':'')
-      +(ds?'<span style="font-size:11px;color:#444">'+ds+'</span>':'')
-      +(n.done?'<span style="font-size:10px;color:#60c070;font-weight:600">Done</span>':'')
-      +'</div></div></div></div>';
-  }).join('');
-}
-
 // ── DRAFT SCHEDULING ───────────────────────────────────
 function getDeadlineStatus(){var now=new Date();var day=now.getDay();var wed=new Date(now);var dtw=(3-day+7)%7;wed.setDate(now.getDate()+dtw);wed.setHours(23,59,0,0);var ip=now>wed;var ms=wed-now;var dl=Math.floor(ms/(1000*60*60*24));var hl=Math.floor((ms%(1000*60*60*24))/(1000*60*60));return{isPastDeadline:ip,daysLeft:dl,hoursLeft:hl,day:day};}
 function renderDraft(){
@@ -2203,7 +2115,6 @@ function renderSettings(){
       {label:'Published sessions', value: totalSess},
       {label:'Draft sessions', value: draftSess},
       {label:'Hourly rate', value: '$'+HOURLY+'/hr'},
-      {label:'Notes', value: notes.length},
       {label:'Cancellations', value: (schedule.cancellations||[]).length},
       {label:'SMS enabled', value: appSettings.smsEnabled ? 'Yes' : 'No'}
     ];
