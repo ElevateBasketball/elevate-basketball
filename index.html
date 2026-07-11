@@ -325,15 +325,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
         <label>Hourly worker rate ($)</label>
         <input type="number" id="sett-hourly-rate" min="1" max="999" placeholder="20">
       </div>
-      <div class="fr">
-        <label>Availability deadline</label>
-        <select id="sett-deadline-day">
-          <option value="3">Wednesday night</option>
-          <option value="1">Monday night</option>
-          <option value="2">Tuesday night</option>
-          <option value="4">Thursday night</option>
-        </select>
-      </div>
     </div>
   </div>
 
@@ -342,7 +333,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     <div style="font-size:14px;font-weight:600;margin-bottom:14px">&#128202; System info</div>
     <div id="sett-system-info" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-sm" onclick="forceSyncNow()">&#8635; Force sync now</button>
       <a href="https://vercel.com/dashboard" target="_blank" class="btn btn-sm" style="text-decoration:none">&#128279; Vercel dashboard</a>
       <a href="https://app.gohighlevel.com" target="_blank" class="btn btn-sm" style="text-decoration:none">&#128279; GHL dashboard</a>
     </div>
@@ -2079,7 +2069,6 @@ function saveSettings(){
   if(portalUrlEl) appSettings.portalUrl = portalUrlEl.value.trim() || appSettings.portalUrl;
   appSettings.hourlyRate = parseInt(document.getElementById('sett-hourly-rate').value) || 20;
 
-  appSettings.deadlineDay = parseInt(document.getElementById('sett-deadline-day').value);
     // Update passwords if changed
   var newCoachPw = document.getElementById('sett-coach-pw').value.trim();
   var newInvPw = document.getElementById('sett-inv-pw').value.trim();
@@ -2100,7 +2089,6 @@ function renderSettings(){
   var el = function(id){ return document.getElementById(id); };
   if(el('sett-portal-url')) el('sett-portal-url').value = appSettings.portalUrl;
   if(el('sett-hourly-rate')) el('sett-hourly-rate').value = appSettings.hourlyRate;
-  if(el('sett-deadline-day')) el('sett-deadline-day').value = appSettings.deadlineDay;
   if(el('sett-coach-pw')) el('sett-coach-pw').placeholder = COACH_PW;
   if(el('sett-inv-pw')) el('sett-inv-pw').placeholder = INV_PW;
 
@@ -2115,8 +2103,7 @@ function renderSettings(){
       {label:'Published sessions', value: totalSess},
       {label:'Draft sessions', value: draftSess},
       {label:'Hourly rate', value: '$'+HOURLY+'/hr'},
-      {label:'Cancellations', value: (schedule.cancellations||[]).length},
-      {label:'SMS enabled', value: appSettings.smsEnabled ? 'Yes' : 'No'}
+      {label:'Cancellations', value: (schedule.cancellations||[]).length}
     ];
     info.innerHTML = items.map(function(item){
       return '<div style="background:#1a1a1a;border:1px solid #2e2e2e;border-radius:8px;padding:10px 12px">'
@@ -2128,10 +2115,6 @@ function renderSettings(){
 
 }
 
-function forceSyncNow(){
-  dbLoad();
-  setSyn('ok', '\u2713 Synced');
-}
 // ── END SETTINGS ───────────────────────────────────────
 
 </script>
