@@ -312,17 +312,6 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     <div style="font-size:11px;color:#555;margin-top:4px">Passwords update on next page load after saving. Share new passwords with your team.</div>
   </div>
 
-  <!-- Pay & Schedule settings -->
-  <div class="card" style="margin-bottom:1rem">
-    <div style="font-size:14px;font-weight:600;margin-bottom:14px">&#128181; Pay &amp; Schedule</div>
-    <div class="g2">
-      <div class="fr">
-        <label>Hourly worker rate ($)</label>
-        <input type="number" id="sett-hourly-rate" min="1" max="999" placeholder="20">
-      </div>
-    </div>
-  </div>
-
   <!-- System info -->
   <div class="card" style="margin-bottom:1rem">
     <div style="font-size:14px;font-weight:600;margin-bottom:14px">&#128202; System info</div>
@@ -533,7 +522,6 @@ var COACH_PW='BigKahuna13!';  // change here only
 var INV_PW='TwistiesWithSprinkles';  // change here only
 var HDR={'apikey':SBK,'Authorization':'Bearer '+SBK,'Content-Type':'application/json'};
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-var HOURLY=20;
 var wkOff=0,calView='schedule',eSessId=null,ePlaId=null,eWorId=null,dnTgt=null,sHoop='1',dragSessId=null,dragGhostEl=null;
 var workers=[];
 var players=[];
@@ -2234,7 +2222,7 @@ function checkCoachPw(){
 }
 
 // ── NOTES / TO-DO ──────────────────────────────────────
-var appSettings={portalUrl:'',hourlyRate:HOURLY,deadlineDay:5,coachPw:COACH_PW,invPw:INV_PW,smsEnabled:false};
+var appSettings={deadlineDay:5,coachPw:COACH_PW,invPw:INV_PW,smsEnabled:false};
 // ── DRAFT SCHEDULING ───────────────────────────────────
 function renderDraft(){
   updLbls();
@@ -2299,31 +2287,22 @@ function pushDraftToSchedule(){
 
 // ── SETTINGS ───────────────────────────────────────────
 function saveSettings(){
-  // Read values from form
-  var portalUrlEl = document.getElementById('sett-portal-url');
-  if(portalUrlEl) appSettings.portalUrl = portalUrlEl.value.trim() || appSettings.portalUrl;
-  appSettings.hourlyRate = parseInt(document.getElementById('sett-hourly-rate').value) || 20;
-
-    // Update passwords if changed
+  // Update passwords if changed
   var newCoachPw = document.getElementById('sett-coach-pw').value.trim();
   var newInvPw = document.getElementById('sett-inv-pw').value.trim();
   if(newCoachPw) { appSettings.coachPw = newCoachPw; COACH_PW = newCoachPw; }
   if(newInvPw) { appSettings.invPw = newInvPw; INV_PW = newInvPw; }
 
-  // Update hourly rate globally
-    // Save to localStorage
+  // Save to localStorage
   try { localStorage.setItem('eb_settings', JSON.stringify(appSettings)); } catch(e){}
 
-  // Update SMS label
-    setSyn('ok', '\u2713 Settings saved');
+  setSyn('ok', '\u2713 Settings saved');
   alert('Settings saved. Password changes take effect immediately this session.');
 }
 
 function renderSettings(){
   // Populate form from current settings
   var el = function(id){ return document.getElementById(id); };
-  if(el('sett-portal-url')) el('sett-portal-url').value = appSettings.portalUrl;
-  if(el('sett-hourly-rate')) el('sett-hourly-rate').value = appSettings.hourlyRate;
   if(el('sett-coach-pw')) el('sett-coach-pw').placeholder = COACH_PW;
   if(el('sett-inv-pw')) el('sett-inv-pw').placeholder = INV_PW;
 
@@ -2337,7 +2316,6 @@ function renderSettings(){
       {label:'Workers', value: workers.length},
       {label:'Published sessions', value: totalSess},
       {label:'Draft sessions', value: draftSess},
-      {label:'Hourly rate', value: '$'+HOURLY+'/hr'},
       {label:'Cancellations', value: (schedule.cancellations||[]).length}
     ];
     info.innerHTML = items.map(function(item){
