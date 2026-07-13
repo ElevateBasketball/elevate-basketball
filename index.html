@@ -1431,19 +1431,30 @@ function renderWorkers(){
   updLbls();
   var at=document.getElementById('avtbl');if(!at)return;
   var hdr='<div class="agh"><div style="font-size:11px;color:#666">Name</div>'+DAYS.map(function(d){return '<div style="font-size:11px;color:#666;text-align:center">'+d.slice(0,3)+'</div>'}).join('')+'</div>';
-  var rows=sortWorkersByAvail().map(function(w){
+  var sorted=sortWorkersByAvail();
+  var content=sorted.filter(function(w){return w.isContentTeam;});
+  var others=sorted.filter(function(w){return !w.isContentTeam;});
+
+  function secHdr(title,count,first){
+    return '<div style="margin:'+(first?'0':'16px')+' 0 8px;padding-top:'+(first?'0':'12px')+';'+(first?'':'border-top:1px solid #2e2e2e')+'"><div style="font-size:13px;font-weight:600;color:#e8e8e8">'+title+'</div><div style="font-size:11px;color:#666;margin-top:1px">'+count+' '+(count===1?'person':'people')+'</div></div>';
+  }
+  function avRow(w){
     var dayCells=DAYS.map(function(d){
       var k=w.id+'-'+d+'-'+wkOff;var on=schedule.workerAvail[k];var isUnavailWeek=!!schedule.workerAvail[w.id+'-unavail-'+wkOff];
       var wStyle=isUnavailWeek?'background:#2d0a0a;border-color:#7a1a1a;border:1px solid #7a1a1a;':'';
       return '<div class="ac'+(on?' on':'')+'" style="'+wStyle+'" onclick="togWA(this,\''+w.id+'\',\''+d+'\')">'+(isUnavailWeek?'\ud83d\udeab':on?'\u2713':'\u2013')+'</div>';
     }).join('');
     return '<div class="agr"><div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:#7ab8f0" onclick="openEW(\''+w.id+'\')">'+w.name.split(' ')[0]+'</div>'+dayCells+'</div>';
-  }).join('');
-  at.innerHTML=hdr+rows;
+  }
+  at.innerHTML=secHdr('Content Team',content.length,true)+(content.length?hdr+content.map(avRow).join(''):'<div style="font-size:12px;color:#555;padding:4px 0">No content team members yet.</div>')
+    +secHdr('Workers',others.length,false)+(others.length?hdr+others.map(avRow).join(''):'<div style="font-size:12px;color:#555;padding:4px 0">No workers yet.</div>');
+
+  function riRow(w){
+    return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;cursor:pointer;color:#7ab8f0" onclick="openEW(\''+w.id+'\')"  >'+w.name+(w.isCoach?' <span style="background:#0a2d18;color:#60c070;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Coach</span>':'')+(w.isContentTeam?' <span style="background:#0c2040;color:#7ab8f0;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Content team</span>':'')+(w.isIntern?' <span style="background:#2a1a06;color:#f0a040;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Intern</span>':'')+'</div>'+(w.contact?'<div style="font-size:11px;color:#666">'+w.contact+'</div>':'')+'</div></div>';
+  }
   document.getElementById('worlist').innerHTML=!workers.length?'<div class="empty">No workers yet.</div>':
-    sortWorkersByAvail().map(function(w){
-      return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;cursor:pointer;color:#7ab8f0" onclick="openEW(\''+w.id+'\')"  >'+w.name+(w.isCoach?' <span style="background:#0a2d18;color:#60c070;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Coach</span>':'')+(w.isContentTeam?' <span style="background:#0c2040;color:#7ab8f0;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Content team</span>':'')+(w.isIntern?' <span style="background:#2a1a06;color:#f0a040;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Intern</span>':'')+'</div>'+(w.contact?'<div style="font-size:11px;color:#666">'+w.contact+'</div>':'')+'</div></div>';
-    }).join('');
+    secHdr('Content Team',content.length,true)+(content.length?content.map(riRow).join(''):'<div style="font-size:12px;color:#555;padding:4px 0">No content team members yet.</div>')
+    +secHdr('Workers',others.length,false)+(others.length?others.map(riRow).join(''):'<div style="font-size:12px;color:#555;padding:4px 0">No workers yet.</div>');
 }
 
 function togWA(el,wid,day){var k=wid+'-'+day+'-'+wkOff;schedule.workerAvail[k]=!schedule.workerAvail[k];queueSave();renderWorkers()}
