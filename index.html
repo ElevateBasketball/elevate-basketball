@@ -204,6 +204,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     <div class="metric"><div class="ml">Workers</div><div class="mv" id="mwsc">0</div></div>
   </div>
   <div class="card"><div class="card-title">Pay breakdown</div><div id="paylist"></div></div>
+  <div class="card"><div class="card-title">Pay periods (biweekly)</div><div style="font-size:12px;color:#999;margin-bottom:12px">Totals per worker for each two-week pay period. Mark a period paid once it's been sent.</div><div id="payperiods"></div></div>
 </div>
 
 <div class="section" id="tab-sum">
@@ -638,6 +639,7 @@ async function doSaveSchedule(){
     cur.sessions=merged;cur.workerAvail=schedule.workerAvail;
     cur.playerAvail=schedule.playerAvail;cur.locations=schedule.locations;
     cur.dayNotes=schedule.dayNotes;cur.weekOffset=wkOff;
+    cur.payPeriodStatus=schedule.payPeriodStatus||{};
     await fetch(SBU+'/rest/v1/state?id=eq.main',{method:'PATCH',headers:Object.assign({},HDR,{'Prefer':'return=minimal'}),body:JSON.stringify({data:cur,updated_at:new Date().toISOString()})});
     setSyn('ok','\u2713 Saved \u2014 synced');
   }catch(e){setSyn('err','\u26A0 Save failed')}
@@ -655,6 +657,7 @@ setInterval(function(){
         if(d.workerAvail&&Object.keys(d.workerAvail).length>0)schedule.workerAvail=d.workerAvail;
         if(d.locations)schedule.locations=d.locations;
         if(d.dayNotes)schedule.dayNotes=d.dayNotes;
+        if(d.payPeriodStatus)schedule.payPeriodStatus=d.payPeriodStatus;
         renderAll();
       }
     }).catch(function(){});
@@ -1516,8 +1519,58 @@ function renderPay(){
   document.getElementById('mhrs').textContent=tH.toFixed(1);document.getElementById('mpay').textContent='$'+Math.round(tP);
   document.getElementById('msess').textContent=wkSess(wkOff).length;document.getElementById('mwsc').textContent=data.length;
   var list=document.getElementById('paylist');
-  if(!data.length){list.innerHTML='<div class="empty">No sessions yet.</div>';return}
-  list.innerHTML=data.map(function(w){var ws2=wkSess(wkOff).filter(function(s){return (s.coaches||[]).indexOf(w.id)>=0||(s.workers||[]).indexOf(w.id)>=0||s.contentWorker===w.id});return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500">'+w.name+'</div><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">'+ws2.map(function(s){return '<span style="font-size:11px;background:#222;padding:2px 6px;border-radius:4px;border:1px solid #2e2e2e">'+s.day.slice(0,3)+' '+fmtT(s.start)+'\u2013'+fmtT(s.end)+'</span>'}).join('')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:500">'+w.hrs.toFixed(1)+' hrs</div><div style="font-size:13px;color:#60c070;font-weight:500">$'+Math.round(w.hrs*HOURLY)+'</div></div></div>'}).join('');
+  if(!data.length){list.innerHTML='<div class="empty">No sessions yet.</div>';}
+  else list.innerHTML=data.map(function(w){var ws2=wkSess(wkOff).filter(function(s){return (s.coaches||[]).indexOf(w.id)>=0||(s.workers||[]).indexOf(w.id)>=0||s.contentWorker===w.id});return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500">'+w.name+'</div><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">'+ws2.map(function(s){return '<span style="font-size:11px;background:#222;padding:2px 6px;border-radius:4px;border:1px solid #2e2e2e">'+s.day.slice(0,3)+' '+fmtT(s.start)+'\u2013'+fmtT(s.end)+'</span>'}).join('')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:500">'+w.hrs.toFixed(1)+' hrs</div><div style="font-size:13px;color:#60c070;font-weight:500">$'+Math.round(w.hrs*HOURLY)+'</div></div></div>'}).join('');
+  renderPayPeriods();
+}
+
+function payPeriodsForWorker(wid){
+  var allS=schedule.sessions.filter(function(s){return (s.coaches||[]).indexOf(wid)>=0||(s.workers||[]).indexOf(wid)>=0||s.contentWorker===wid;});
+  if(!allS.length)return [];
+  var weeks=allS.map(function(s){return s.week||0});
+  var minWk=Math.min.apply(null,weeks);var maxWk=Math.max.apply(null,weeks);
+  var periods=[];
+  for(var pw=minWk;pw<=maxWk;pw+=2){
+    var w1=pw,w2=pw+1;
+    var ps=allS.filter(function(s){return s.week===w1||s.week===w2;});
+    if(!ps.length)continue;
+    var mins=ps.reduce(function(a,s){return a+t2m(s.end)-t2m(s.start);},0);
+    var hrs=parseFloat((mins/60).toFixed(2));var pay=Math.round(hrs*HOURLY);
+    var d1=getWkDatesOff(w1)[0];var d2=getWkDatesOff(w2)[5];
+    var key=wid+'-period-'+w1;
+    var status=(schedule.payPeriodStatus&&schedule.payPeriodStatus[key])||'pending';
+    periods.push({w1:w1,pay:pay,hrs:hrs,d1:d1,d2:d2,status:status,key:key});
+  }
+  return periods.reverse();
+}
+
+function renderPayPeriods(){
+  var el=document.getElementById('payperiods');if(!el)return;
+  var eligible=workers.filter(function(w){return !w.isIntern;});
+  var rows=[];
+  eligible.forEach(function(w){
+    payPeriodsForWorker(w.id).forEach(function(p){rows.push(Object.assign({worker:w},p));});
+  });
+  if(!rows.length){el.innerHTML='<div class="empty">No pay periods yet.</div>';return;}
+  rows.sort(function(a,b){return b.w1-a.w1||a.worker.name.localeCompare(b.worker.name);});
+  el.innerHTML=rows.map(function(r){
+    var isPaid=r.status==='paid';
+    return '<div class="ri" style="align-items:center">'
+      +'<div class="av">'+ini(r.worker.name)+'</div>'
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:500">'+r.worker.name+'</div>'
+      +'<div style="font-size:11px;color:#999;margin-top:2px">'+fmtD(r.d1)+' \u2013 '+fmtD(r.d2)+' &middot; '+r.hrs.toFixed(1)+' hrs</div></div>'
+      +'<div style="text-align:right;flex-shrink:0;margin-right:10px"><div style="font-size:14px;font-weight:600;color:'+(isPaid?'#60c070':'#f0b060')+'">$'+r.pay+'</div></div>'
+      +'<button class="btn btn-sm'+(isPaid?'':' btn-p')+'" style="flex-shrink:0'+(isPaid?';border-color:#2a7a40;color:#60c070;background:#0a2d18':'')+'" onclick="togPayPeriod(\''+r.key+'\')">'+(isPaid?'\u2713 Paid':'Mark paid')+'</button>'
+      +'</div>';
+  }).join('');
+}
+
+function togPayPeriod(key){
+  schedule.payPeriodStatus=schedule.payPeriodStatus||{};
+  if(schedule.payPeriodStatus[key]==='paid')delete schedule.payPeriodStatus[key];
+  else schedule.payPeriodStatus[key]='paid';
+  queueSave();
+  renderPayPeriods();
 }
 
 function renderSum(){
