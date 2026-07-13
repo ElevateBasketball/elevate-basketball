@@ -1408,11 +1408,28 @@ function saveSessWithStatus(forcedStatus){
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
 }
 
+function workerAvailRank(w){
+  // 0 = submitted with at least one available day (top)
+  // 1 = submitted but marked unavailable all week (middle)
+  // 2 = did not submit anything for this week (bottom)
+  var hasDay=DAYS.some(function(d){return schedule.workerAvail[w.id+'-'+d+'-'+wkOff];});
+  var isUnavailWeek=!!schedule.workerAvail[w.id+'-unavail-'+wkOff];
+  if(hasDay)return 0;
+  if(isUnavailWeek)return 1;
+  return 2;
+}
+function sortWorkersByAvail(){
+  return workers.slice().sort(function(a,b){
+    var ra=workerAvailRank(a),rb=workerAvailRank(b);
+    if(ra!==rb)return ra-rb;
+    return a.name.localeCompare(b.name);
+  });
+}
 function renderWorkers(){
   updLbls();
   var at=document.getElementById('avtbl');if(!at)return;
   var hdr='<div class="agh"><div style="font-size:11px;color:#666">Name</div>'+DAYS.map(function(d){return '<div style="font-size:11px;color:#666;text-align:center">'+d.slice(0,3)+'</div>'}).join('')+'</div>';
-  var rows=workers.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(w){
+  var rows=sortWorkersByAvail().map(function(w){
     var dayCells=DAYS.map(function(d){
       var k=w.id+'-'+d+'-'+wkOff;var on=schedule.workerAvail[k];var isUnavailWeek=!!schedule.workerAvail[w.id+'-unavail-'+wkOff];
       var wStyle=isUnavailWeek?'background:#2d0a0a;border-color:#7a1a1a;border:1px solid #7a1a1a;':'';
@@ -1422,7 +1439,7 @@ function renderWorkers(){
   }).join('');
   at.innerHTML=hdr+rows;
   document.getElementById('worlist').innerHTML=!workers.length?'<div class="empty">No workers yet.</div>':
-    workers.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).map(function(w){
+    sortWorkersByAvail().map(function(w){
       return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500;cursor:pointer;color:#7ab8f0" onclick="openEW(\''+w.id+'\')"  >'+w.name+(w.isCoach?' <span style="background:#0a2d18;color:#60c070;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Coach</span>':'')+(w.isIntern?' <span style="background:#2a1a06;color:#f0a040;font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600">Intern</span>':'')+'</div>'+(w.contact?'<div style="font-size:11px;color:#666">'+w.contact+'</div>':'')+'</div></div>';
     }).join('');
 }
