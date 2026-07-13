@@ -1420,6 +1420,8 @@ function workerAvailRank(w){
 }
 function sortWorkersByAvail(){
   return workers.slice().sort(function(a,b){
+    var ca=a.isContentTeam?0:1,cb=b.isContentTeam?0:1;
+    if(ca!==cb)return ca-cb;
     var ra=workerAvailRank(a),rb=workerAvailRank(b);
     if(ra!==rb)return ra-rb;
     return a.name.localeCompare(b.name);
