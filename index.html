@@ -1306,6 +1306,8 @@ function saveSess(){
   var sw=workers.filter(function(w){return cNames('smcw').indexOf(w.name)>=0}).map(function(w){return w.id});
   var type=document.getElementById('smtype').value;
   var gp=type==='group'?Array.from(document.querySelectorAll('#smgp .chip.selected')).map(function(c){return c.dataset.pid}).filter(Boolean):[];
+  var prevSession=eSessId?schedule.sessions.find(function(x){return x.id===eSessId}):null;
+  var wasPublished=!!(prevSession&&prevSession.status==='confirmed');
 
   // Check for overbooking warnings
   var warnings=[];
@@ -1341,12 +1343,69 @@ function saveSess(){
     coaches:sc,workers:sw,contentWorker:document.getElementById('smcon').value,focus:focus,groupPlayers:gp,week:wkOff};
   if(eSessId){var i=schedule.sessions.findIndex(function(s){return s.id===eSessId});var ex=schedule.sessions[i];obj.confirmations=ex.confirmations||[];obj.workerConfirmations=ex.workerConfirmations||[];schedule.sessions[i]=obj}
   else schedule.sessions.push(obj);
-  getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);}});
+  var newCopies=[];
+  getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newCopies.push(copy);}});
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
+  if(wasPublished)notifyPublished([obj,prevSession].concat(newCopies),'updated');
 }
 
 function delSess(){schedule.sessions=schedule.sessions.filter(function(s){return s.id!==eSessId});queueSave();closeMo('mo-sess');renderCal()}
 function shConf(msg){var el=document.getElementById('smconf');el.textContent='\u26A0 '+msg;el.style.display='block'}
+
+// ── SCHEDULE PUBLISH NOTIFICATIONS ────────────────────────
+var PORTAL_URL='https://player-worker-portal.vercel.app/';
+function affectedPeopleForSessions(sessList){
+  var playerIds={},workerIds={};
+  sessList.forEach(function(s){
+    if(s.type==='group'||s.type==='pro'){(s.groupPlayers||[]).forEach(function(pid){playerIds[pid]=true;});}
+    else if(s.player){var p=players.find(function(x){return x.name===s.player});if(p)playerIds[p.id]=true;}
+    (s.coaches||[]).forEach(function(id){workerIds[id]=true;});
+    (s.workers||[]).forEach(function(id){workerIds[id]=true;});
+    if(s.contentWorker)workerIds[s.contentWorker]=true;
+  });
+  return {
+    players:players.filter(function(p){return playerIds[p.id];}),
+    workers:workers.filter(function(w){return workerIds[w.id];})
+  };
+}
+function sendPublishEmail(person,kind){
+  if(!person.email)return;
+  kind=kind||'published';
+  var subject='Elevate Basketball \u2014 Your schedule has been published';
+  var lede='Your schedule has been updated';
+  var body='Your schedule has just been published. Tap below to view your sessions and confirm your attendance.';
+  var btnLabel='View my schedule';
+  if(kind==='updated'){
+    subject='Elevate Basketball \u2014 Your schedule has changed';
+    body='A session on your schedule was just updated. Tap below to view your current schedule.';
+  } else if(kind==='cancelled'){
+    subject='Elevate Basketball \u2014 A session was cancelled';
+    lede='A session has been cancelled';
+    body='A session on your schedule has just been cancelled. Tap below to view your current schedule.';
+    btnLabel='View my schedule';
+  }
+  var html='<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">'
+    +'<h2 style="margin-bottom:4px">Elevate Basketball</h2>'
+    +'<p style="color:#666;margin-bottom:24px">'+lede+'</p>'
+    +'<p>Hi '+person.name+',</p>'
+    +'<p>'+body+'</p>'
+    +'<div style="text-align:center;margin:28px 0">'
+    +'<a href="'+PORTAL_URL+'" style="background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;display:inline-block">'+btnLabel+'</a>'
+    +'</div>'
+    +'<p style="color:#666;font-size:13px">Thanks,<br>Mitch \u2014 Elevate Basketball</p></div>';
+  fetch('/api/send-email',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to:[person.email],subject:subject,html:html})
+  }).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('Publish email failed:',r.status,t);});
+  }).catch(function(err){console.warn('Publish email error:',err);});
+}
+function notifyPublished(sessList,kind){
+  var aff=affectedPeopleForSessions(sessList);
+  var all=aff.players.concat(aff.workers);
+  var withEmail=all.filter(function(p){return p.email;});
+  var noEmail=all.filter(function(p){return !p.email;});
+  withEmail.forEach(function(person){sendPublishEmail(person,kind);});
+  return {sent:withEmail.length,missing:noEmail.length};
+}
 
 function publishAll(){
   var drafts=schedule.sessions.filter(function(s){return s.week===wkOff&&s.status==='draft'});
@@ -1356,6 +1415,8 @@ function publishAll(){
     if(!confirm('Publish all '+approved.length+' approved session'+(approved.length!==1?'s':'')+' and notify players/workers?'))return;
     approved.forEach(function(s){s.status='confirmed';s.publishedAt=new Date().toISOString();});
     queueSave();renderCal();
+    var res=notifyPublished(approved);
+    alert('Published! Emailed '+res.sent+' player'+(res.sent===1?'':'s')+'/worker'+(res.sent===1?'':'s')+' a link to confirm attendance.'+(res.missing?' ('+res.missing+' have no email on file.)':''));
   } else {
     if(!confirm('Approve '+drafts.length+' draft session'+(drafts.length!==1?'s':'')+' for publishing?'))return;
     drafts.forEach(function(s){s.status='approved';});
@@ -1366,6 +1427,7 @@ function publishAll(){
 function cancelSess(){
   if(!eSessId)return;
   var s=schedule.sessions.find(function(x){return x.id===eSessId});if(!s)return;
+  var wasPublished=s.status==='confirmed';
   var who=[];if(s.player)who.push(s.player);
   (s.workers||[]).forEach(function(wid){var w=workers.find(function(x){return x.id===wid});if(w)who.push(w.name);});
   if(!confirm('Cancel this session'+(s.player?' for '+s.player:'')+' on '+s.day+'?'+(who.length?'\n\nAffected: '+who.join(', '):'')))return;
@@ -1373,6 +1435,7 @@ function cancelSess(){
   if(!schedule.cancellations)schedule.cancellations=[];
   schedule.cancellations.push({sessId:s.id,day:s.day,start:s.start,end:s.end,player:s.player,week:s.week,cancelledAt:s.cancelledAt,workers:s.workers||[]});
   queueSave();closeMo('mo-sess');renderCal();
+  if(wasPublished)notifyPublished([s],'cancelled');
 }
 function unpublishSess(){
   if(!eSessId)return;
@@ -1395,6 +1458,7 @@ function publishSess(){
   s.status='confirmed';
   s.publishedAt=new Date().toISOString();
   queueSave();
+  notifyPublished([s]);
   closeMo('mo-sess');
   renderCal();
 }
@@ -1412,9 +1476,12 @@ function saveSessWithStatus(forcedStatus){
     player:(type==='group'||type==='pro')?document.getElementById('smgn').value.trim()||'Group':document.getElementById('smpl').value.trim(),
     hoop:sHoop,type:type,status:forcedStatus,location:document.getElementById('smloc').value.trim(),
     coaches:sc,workers:sw,contentWorker:document.getElementById('smcon').value,focus:'',groupPlayers:gp,week:wkOff};
+  if(forcedStatus==='confirmed')obj.publishedAt=new Date().toISOString();
+  var newSessions=[obj];
   schedule.sessions.push(obj);
-  getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);}});
+  getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newSessions.push(copy);}});
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
+  if(forcedStatus==='confirmed')notifyPublished(newSessions);
 }
 
 function workerAvailRank(w){
