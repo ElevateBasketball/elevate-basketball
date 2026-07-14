@@ -193,14 +193,12 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
 
 <div class="section" id="tab-pay">
   <div class="tb" style="margin-bottom:1rem"><span style="font-size:15px;font-weight:500;flex:1">Worker Pay <span id="pay-wklbl" style="font-size:12px;font-weight:400;color:#999"></span></span><div style="display:flex;gap:8px"><button class="btn btn-sm" onclick="chgWk(-1);renderPay()">&#8249;</button><button class="btn btn-sm" onclick="chgWk(1);renderPay()">&#8250;</button></div></div>
-  <div class="g4" style="margin-bottom:1rem">
+  <div class="g2" style="margin-bottom:1rem">
     <div class="metric"><div class="ml">Hours</div><div class="mv" id="mhrs">0</div></div>
     <div class="metric"><div class="ml">Total pay</div><div class="mv" id="mpay">$0</div></div>
-    <div class="metric"><div class="ml">Sessions</div><div class="mv" id="msess">0</div></div>
-    <div class="metric"><div class="ml">Workers</div><div class="mv" id="mwsc">0</div></div>
   </div>
-  <div class="card"><div class="card-title">Pay breakdown</div><div id="paylist"></div></div>
-  <div class="card"><div class="card-title">Pay periods (biweekly)</div><div style="font-size:12px;color:#999;margin-bottom:12px">Totals per worker for each two-week pay period. Mark a period paid once it's been sent.</div><div id="payperiods"></div></div>
+  <div class="card"><div class="card-title">This week's shifts <span id="pay-wklbl2" style="font-size:11px;font-weight:400;color:#666"></span></div><div id="paylist"></div></div>
+  <div class="card"><div class="card-title">All pay periods</div><div style="font-size:12px;color:#999;margin-bottom:12px">Full biweekly payroll history for every worker &mdash; not affected by the week selector above. Mark a period paid once it's been sent.</div><div id="payperiods"></div></div>
 </div>
 
 <div class="section" id="tab-inv">
@@ -1739,7 +1737,7 @@ function renderPay(){
   var data=workers.filter(function(w){return !payExcluded(w);}).map(function(w){return Object.assign({},w,{hrs:calcHrs(w.id)})}).filter(function(w){return w.hrs>0}).sort(function(a,b){return b.hrs-a.hrs});
   var tH=data.reduce(function(a,w){return a+w.hrs},0);var tP=data.reduce(function(a,w){return a+w.hrs*workerRate(w)},0);
   document.getElementById('mhrs').textContent=tH.toFixed(1);document.getElementById('mpay').textContent='$'+Math.round(tP);
-  document.getElementById('msess').textContent=wkSess(wkOff).length;document.getElementById('mwsc').textContent=data.length;
+  var wl2=document.getElementById('pay-wklbl2');if(wl2)wl2.textContent=document.getElementById('pay-wklbl').textContent;
   var list=document.getElementById('paylist');
   if(!data.length){list.innerHTML='<div class="empty">No sessions yet.</div>';}
   else list.innerHTML=data.map(function(w){var ws2=wkSess(wkOff).filter(function(s){return (s.coaches||[]).indexOf(w.id)>=0||(s.workers||[]).indexOf(w.id)>=0||s.contentWorker===w.id});return '<div class="ri"><div class="av">'+ini(w.name)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:500">'+w.name+'</div><div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">'+ws2.map(function(s){return '<span style="font-size:11px;background:#222;padding:2px 6px;border-radius:4px;border:1px solid #2e2e2e">'+s.day.slice(0,3)+' '+fmtT(s.start)+'\u2013'+fmtT(s.end)+'</span>'}).join('')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:500">'+w.hrs.toFixed(1)+' hrs</div><div style="font-size:13px;color:#60c070;font-weight:500">$'+Math.round(w.hrs*workerRate(w))+'</div></div></div>'}).join('');
