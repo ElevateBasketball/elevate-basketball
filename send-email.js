@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     var response = await fetch('https://api.resend.com/emails',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+RESEND_KEY},
-      body:JSON.stringify({from:payload.from||'Elevate Basketball <noreply@elevatebball.com>',to:payload.to,subject:payload.subject,html:payload.html})
+      body:JSON.stringify({from:payload.from||'Elevate Basketball <noreply@elevatebball.com>',to:payload.to,subject:payload.subject,html:payload.html,attachments:payload.attachments||undefined})
     });
     var data = await response.text();
     if(!response.ok) return res.status(response.status).json({error:data});

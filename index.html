@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Elevate Basketball Scheduling</title>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script>emailjs.init("jxXdWILpM1-idsF--");</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;background:#111;color:#e8e8e8}
@@ -1438,20 +1436,59 @@ function affectedPeopleForSessions(sessList){
     workers:workers.filter(function(w){return workerIds[w.id];})
   };
 }
-function sendPublishEmail(person,kind){
+
+// ── ICS CALENDAR INVITES ───────────────────────────────
+function toICSDate(d){return d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';}
+function icsEscape(str){return String(str||'').replace(/([,;])/g,'\\$1').replace(/\n/g,'\\n');}
+function sessionDatesUTC(s){
+  var wkDates=getWkDatesOff(s.week||0);
+  var dayIdx=DAYS.indexOf(s.day);
+  var base=wkDates[dayIdx]||new Date();
+  var sp=(s.start||'0:0').split(':');var st=new Date(base);st.setHours(+sp[0],+sp[1],0,0);
+  var ep=(s.end||'0:0').split(':');var et=new Date(base);et.setHours(+ep[0],+ep[1],0,0);
+  return {start:st,end:et};
+}
+function buildVEvent(s,kind){
+  var dates=sessionDatesUTC(s);
+  var uid=s.id+'@elevatebball.com';
+  var summary='Elevate Basketball'+(s.player?' \u2014 '+s.player:'');
+  var status=kind==='cancelled'?'CANCELLED':'CONFIRMED';
+  return [
+    'BEGIN:VEVENT',
+    'UID:'+uid,
+    'DTSTAMP:'+toICSDate(new Date()),
+    'DTSTART:'+toICSDate(dates.start),
+    'DTEND:'+toICSDate(dates.end),
+    'SUMMARY:'+icsEscape(summary),
+    'LOCATION:'+icsEscape(s.location||''),
+    'STATUS:'+status,
+    'SEQUENCE:'+(s.icsSeq||0),
+    'ORGANIZER;CN=Elevate Basketball:mailto:noreply@elevatebball.com',
+    'END:VEVENT'
+  ].join('\r\n');
+}
+function buildICSFile(sessList,kind){
+  var method=kind==='cancelled'?'CANCEL':'REQUEST';
+  var body=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Elevate Basketball//Schedule//EN','METHOD:'+method,'CALSCALE:GREGORIAN'];
+  sessList.forEach(function(s){body.push(buildVEvent(s,kind));});
+  body.push('END:VCALENDAR');
+  return body.join('\r\n');
+}
+function icsBase64(str){return btoa(unescape(encodeURIComponent(str)));}
+function sendPublishEmail(person,kind,sessions){
   if(!person.email)return;
   kind=kind||'published';
   var subject='Elevate Basketball \u2014 Your schedule has been published';
   var lede='Your schedule has been updated';
-  var body='Your schedule has just been published. Tap below to view your sessions and confirm your attendance.';
+  var body='Your schedule has just been published. Tap below to view your sessions and confirm your attendance, or accept the attached calendar invite to add it to your calendar.';
   var btnLabel='View my schedule';
   if(kind==='updated'){
     subject='Elevate Basketball \u2014 Your schedule has changed';
-    body='A session on your schedule was just updated. Tap below to view your current schedule.';
+    body='A session on your schedule was just updated. Tap below to view your current schedule \u2014 the attached calendar invite has also been updated to match.';
   } else if(kind==='cancelled'){
     subject='Elevate Basketball \u2014 A session was cancelled';
     lede='A session has been cancelled';
-    body='A session on your schedule has just been cancelled. Tap below to view your current schedule.';
+    body='A session on your schedule has just been cancelled. The attached calendar update will remove it from your calendar automatically.';
     btnLabel='View my schedule';
   }
   var html='<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">'
@@ -1463,19 +1500,44 @@ function sendPublishEmail(person,kind){
     +'<a href="'+PORTAL_URL+'" style="background:#111;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;display:inline-block">'+btnLabel+'</a>'
     +'</div>'
     +'<p style="color:#666;font-size:13px">Thanks,<br>Mitch \u2014 Elevate Basketball</p></div>';
+  var payload={to:[person.email],subject:subject,html:html};
+  if(sessions&&sessions.length){
+    try{
+      var ics=buildICSFile(sessions,kind);
+      payload.attachments=[{filename:(kind==='cancelled'?'cancellation.ics':'schedule.ics'),content:icsBase64(ics)}];
+    }catch(e){console.warn('ICS build failed:',e);}
+  }
   fetch('/api/send-email',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({to:[person.email],subject:subject,html:html})
+    body:JSON.stringify(payload)
   }).then(function(r){if(!r.ok)r.text().then(function(t){console.warn('Publish email failed:',r.status,t);});
   }).catch(function(err){console.warn('Publish email error:',err);});
 }
 function notifyPublished(sessList,kind){
-  var aff=affectedPeopleForSessions(sessList);
-  var all=aff.players.concat(aff.workers);
-  var withEmail=all.filter(function(p){return p.email;});
-  var noEmail=all.filter(function(p){return !p.email;});
-  withEmail.forEach(function(person){sendPublishEmail(person,kind);});
-  return {sent:withEmail.length,missing:noEmail.length};
+  // Bump each session's calendar sequence once per notification event (not once per recipient)
+  sessList.forEach(function(s){
+    if(typeof s.icsSeq!=='number')s.icsSeq=0;
+    if(kind==='updated'||kind==='cancelled')s.icsSeq+=1;
+  });
+  var byEmail={};var missingIds={};
+  sessList.forEach(function(s){
+    var aff=affectedPeopleForSessions([s]);
+    aff.players.concat(aff.workers).forEach(function(person){
+      if(person.email){
+        if(!byEmail[person.email])byEmail[person.email]={person:person,sessions:[]};
+        byEmail[person.email].sessions.push(s);
+      } else {
+        missingIds[person.id]=true;
+      }
+    });
+  });
+  Object.keys(byEmail).forEach(function(email){
+    var entry=byEmail[email];
+    sendPublishEmail(entry.person,kind,entry.sessions);
+  });
+  queueSave();
+  return {sent:Object.keys(byEmail).length,missing:Object.keys(missingIds).length};
 }
+
 
 function publishAll(){
   var drafts=schedule.sessions.filter(function(s){return s.week===wkOff&&s.status==='draft'});
@@ -2222,7 +2284,7 @@ function checkCoachPw(){
 }
 
 // ── NOTES / TO-DO ──────────────────────────────────────
-var appSettings={deadlineDay:5,coachPw:COACH_PW,invPw:INV_PW,smsEnabled:false};
+var appSettings={coachPw:COACH_PW,invPw:INV_PW};
 // ── DRAFT SCHEDULING ───────────────────────────────────
 function renderDraft(){
   updLbls();
