@@ -198,7 +198,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
     <div class="metric"><div class="ml">Total pay</div><div class="mv" id="mpay">$0</div></div>
   </div>
   <div class="card"><div class="card-title">This week's shifts <span id="pay-wklbl2" style="font-size:11px;font-weight:400;color:#666"></span></div><div id="paylist"></div></div>
-  <div class="card"><div class="card-title">All pay periods</div><div style="font-size:12px;color:#999;margin-bottom:12px">Full biweekly payroll history for every worker &mdash; not affected by the week selector above. Mark a period paid once it's been sent.</div><div id="payperiods"></div></div>
+  <div class="card"><div class="tb" style="margin-bottom:2px"><span class="card-title" style="flex:1;margin-bottom:0">All pay periods</span><button class="btn btn-sm" onclick="exportPayrollCSV()">&#11015; Export CSV</button></div><div style="font-size:12px;color:#999;margin-bottom:12px">Full biweekly payroll history for every worker &mdash; not affected by the week selector above. Mark a period paid once it's been sent.</div><div id="payperiods"></div></div>
 </div>
 
 <div class="section" id="tab-inv">
@@ -1792,6 +1792,42 @@ function togPayPeriod(key){
   else schedule.payPeriodStatus[key]='paid';
   queueSave();
   renderPayPeriods();
+}
+
+function csvEsc(str){str=String(str===undefined||str===null?'':str);if(/[",\n]/.test(str))return '"'+str.replace(/"/g,'""')+'"';return str;}
+function exportPayrollCSV(){
+  var eligible=workers.filter(function(w){return !payExcluded(w);});
+  var rows=[];
+  eligible.forEach(function(w){
+    payPeriodsForWorker(w.id).forEach(function(p){rows.push(Object.assign({worker:w},p));});
+  });
+  if(!rows.length){alert('No pay periods to export yet.');return;}
+  rows.sort(function(a,b){return b.w1-a.w1||a.worker.name.localeCompare(b.worker.name);});
+  var typeLabels={standard:'Worker',hourly:'Hourly Worker'};
+  var header=['Worker','Type','Period start','Period end','Hours','Rate ($/hr)','Total pay ($)','Status'];
+  var lines=[header.map(csvEsc).join(',')];
+  rows.forEach(function(r){
+    var vals=[
+      r.worker.name,
+      typeLabels[workerType(r.worker)]||'Worker',
+      fmtD(r.d1),
+      fmtD(r.d2),
+      r.hrs.toFixed(2),
+      workerRate(r.worker),
+      r.pay,
+      r.status==='paid'?'Paid':'Pending'
+    ];
+    lines.push(vals.map(csvEsc).join(','));
+  });
+  var csv=lines.join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  var today=new Date();
+  var ymd=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  a.href=url;a.download='elevate_payroll_'+ymd+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
 function openLoc(){document.getElementById('locform').innerHTML=DAYS.map(function(d){return '<div class="fr"><label>'+d+'</label><input type="text" id="lf-'+d+'" value="'+(schedule.locations[d]||'')+'" placeholder="e.g. Main Gym"></div>'}).join('');openMo('mo-loc')}
