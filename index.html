@@ -323,7 +323,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
 <div class="mo" id="mo-sess"><div class="modal">
   <div class="mtt" id="smtitle">Add session</div>
   <div id="smstatusbanner" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:12px;text-align:center"></div>
-  <div class="fr"><label>Day</label><select id="smday" onchange="refHP();rebuildPickers();buildPlSel(document.getElementById('smpl').value);buildGP(Array.from(document.querySelectorAll('#smgp .chip.selected')).map(function(c){return c.dataset.pid}).filter(Boolean));refreshSummerNote()"></select></div>
+  <div class="fr"><label>Day</label><select id="smday" onchange="refHP();rebuildPickers();buildPlSel(document.getElementById('smpl').value);buildGP(Array.from(document.querySelectorAll('#smgp .chip.selected')).map(function(c){return c.dataset.pid}).filter(Boolean))"></select></div>
   <div class="g2">
     <div class="fr"><label>Start</label><select id="smst" onchange="autoEnd()"></select></div>
     <div class="fr"><label>End</label><select id="smet" onchange="refHP()"></select></div>
@@ -366,10 +366,26 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   </div>
   <div class="fr">
     <label>Recurring <span style="font-size:11px;color:#666">(optional)</span></label>
-    <div class="copy-chips">
-      <span class="chip" id="copy-summer" onclick="togSummerCopy(this)" style="border-color:#f0b060;color:#f0b060">&#128257; Repeat weekly all summer (thru Aug 13)</span>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="recur-on" style="width:auto" onchange="toggleRecurUI()"> <span style="font-size:13px">Make this a recurring session</span>
+    </label>
+    <div id="recur-body" style="display:none">
+      <div style="font-size:11px;color:#666;margin-bottom:5px">Repeat on these days</div>
+      <div class="copy-chips" id="recur-days">
+        <span class="chip" id="recur-day-Monday" onclick="togRecurDay(this)">Mon</span>
+        <span class="chip" id="recur-day-Tuesday" onclick="togRecurDay(this)">Tue</span>
+        <span class="chip" id="recur-day-Wednesday" onclick="togRecurDay(this)">Wed</span>
+        <span class="chip" id="recur-day-Thursday" onclick="togRecurDay(this)">Thu</span>
+        <span class="chip" id="recur-day-Friday" onclick="togRecurDay(this)">Fri</span>
+        <span class="chip" id="recur-day-Saturday" onclick="togRecurDay(this)">Sat</span>
+        <span class="chip" id="recur-day-Sunday" onclick="togRecurDay(this)">Sun</span>
+      </div>
+      <div class="g2" style="margin-top:10px">
+        <div class="fr"><label style="font-size:11px;color:#666">Repeat until</label><input type="date" id="recur-until" onchange="buildRecurPreview()"></div>
+        <div class="fr"><label style="font-size:11px;color:#666">&nbsp;</label><button class="btn btn-sm" type="button" onclick="setRecurEndOfSummer()">Thru Aug 13 (end of summer)</button></div>
+      </div>
+      <div id="recur-preview" style="margin-top:10px;font-size:11px;color:#666">Pick at least one day and an end date to preview dates.</div>
     </div>
-    <div id="summer-copy-note" style="display:none;font-size:11px;color:#666;margin-top:5px"></div>
   </div>
   <div class="fr"><label>Location <span style="font-size:11px;color:#666">(gym / court)</span></label><input type="text" id="smloc" placeholder="e.g. Merrimack College"></div>
   <div id="smconf" style="padding:8px 10px;background:#2d0a0a;border-radius:8px;font-size:12px;color:#f07070;margin-top:8px;display:none"></div>
@@ -1308,31 +1324,60 @@ function togAllCopy(el){
   DAYS.forEach(function(d){if(d!==cur){var c=document.getElementById('copy-'+d);if(c){if(on)c.classList.add('selected');else c.classList.remove('selected');}}});
 }
 function getCopyDays(){return DAYS.filter(function(d){var c=document.getElementById('copy-'+d);return c&&c.classList.contains('selected')})}
-function clearCopy(){DAYS.forEach(function(d){var c=document.getElementById('copy-'+d);if(c)c.classList.remove('selected')});var a=document.getElementById('copy-all');if(a)a.classList.remove('selected');var s=document.getElementById('copy-summer');if(s)s.classList.remove('selected');var n=document.getElementById('summer-copy-note');if(n)n.style.display='none'}
+function clearCopy(){DAYS.forEach(function(d){var c=document.getElementById('copy-'+d);if(c)c.classList.remove('selected')});var a=document.getElementById('copy-all');if(a)a.classList.remove('selected');resetRecurUI()}
 
-// ── SUMMER RECURRENCE ──────────────────────────────────
-// Elevate Academy runs through August 13, 2026 — recurring sessions never get scheduled past that date.
-var SUMMER_END=new Date(2026,7,13,23,59,59);
-function togSummerCopy(el){
-  el.classList.toggle('selected');
-  refreshSummerNote();
-}
-function refreshSummerNote(){
-  var el=document.getElementById('copy-summer');var note=document.getElementById('summer-copy-note');
-  if(!el||!note)return;
-  if(el.classList.contains('selected')){
-    var lastWk=lastSummerWeekFor(document.getElementById('smday').value);
-    var weeksAdded=lastWk-wkOff;
-    note.style.display='block';
-    note.textContent=weeksAdded>0?('Will add this session on '+weeksAdded+' more week'+(weeksAdded!==1?'s':'')+', every '+document.getElementById('smday').value+' through Aug 13.'):'This is already the last week of summer — no additional weeks to add.';
-  } else {
-    note.style.display='none';
+// ── CUSTOM RECURRENCE ──────────────────────────────────
+var SUMMER_END_DEFAULT='2026-08-13';
+function toggleRecurUI(){
+  var on=document.getElementById('recur-on').checked;
+  document.getElementById('recur-body').style.display=on?'block':'none';
+  if(on&&!getRecurDays().length){
+    var cur=document.getElementById('smday').value;
+    var c=document.getElementById('recur-day-'+cur);
+    if(c)c.classList.add('selected');
   }
+  buildRecurPreview();
 }
-function lastSummerWeekFor(day){
-  var idx=DAYS.indexOf(day),w=wkOff;
-  while(getWkDatesOff(w+1)[idx]<=SUMMER_END){w++;if(w>60)break;}
-  return w;
+function togRecurDay(el){el.classList.toggle('selected');buildRecurPreview()}
+function getRecurDays(){return DAYS.filter(function(d){var c=document.getElementById('recur-day-'+d);return c&&c.classList.contains('selected')})}
+function setRecurEndOfSummer(){document.getElementById('recur-until').value=SUMMER_END_DEFAULT;buildRecurPreview()}
+function resetRecurUI(){
+  document.getElementById('recur-on').checked=false;
+  document.getElementById('recur-body').style.display='none';
+  DAYS.forEach(function(d){var c=document.getElementById('recur-day-'+d);if(c)c.classList.remove('selected')});
+  document.getElementById('recur-until').value='';
+  document.getElementById('recur-preview').innerHTML='Pick at least one day and an end date to preview dates.';
+}
+function buildRecurPreview(){
+  var box=document.getElementById('recur-preview');
+  var days=getRecurDays();
+  var untilStr=document.getElementById('recur-until').value;
+  if(!days.length||!untilStr){box.innerHTML='Pick at least one day and an end date to preview dates.';return}
+  var until=new Date(untilStr+'T23:59:59');
+  var items=[];
+  var w=wkOff+1,guard=0;
+  while(guard++<104){
+    var dates=getWkDatesOff(w);
+    var anyInRange=false;
+    days.forEach(function(d){
+      var idx=DAYS.indexOf(d);var dt=dates[idx];
+      if(dt<=until){anyInRange=true;items.push({week:w,day:d,date:dt})}
+    });
+    if(!anyInRange)break;
+    w++;
+  }
+  if(!items.length){box.innerHTML='No upcoming dates found in that range.';return}
+  box.innerHTML='<div style="margin-bottom:6px">'+items.length+' session'+(items.length!==1?'s':'')+' will be added &mdash; uncheck any to skip that date:</div>'+
+    '<div style="max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding:8px;background:#181818;border-radius:8px;border:1px solid #2e2e2e">'+
+    items.map(function(it){
+      return '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#ccc;cursor:pointer">'+
+        '<input type="checkbox" class="recur-item-cb" data-week="'+it.week+'" data-day="'+it.day+'" checked style="width:auto">'+
+        it.day.slice(0,3)+' '+fmtD(it.date)+'</label>';
+    }).join('')+'</div>';
+}
+function getRecurSelections(){
+  if(!document.getElementById('recur-on').checked)return[];
+  return Array.from(document.querySelectorAll('.recur-item-cb:checked')).map(function(c){return{week:parseInt(c.dataset.week),day:c.dataset.day}});
 }
 
 function cNames(cid){return Array.from(document.querySelectorAll('#'+cid+' .chip.selected')).map(function(c){return c.textContent.trim()})}
@@ -1443,25 +1488,10 @@ function saveSess(){
   else schedule.sessions.push(obj);
   var newCopies=[];
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newCopies.push(copy);}});
-  var summerOn=!!(document.getElementById('copy-summer')&&document.getElementById('copy-summer').classList.contains('selected'));
-  if(summerOn){
-    var repeatDays=[day].concat(getCopyDays());
-    var w=wkOff+1,guard=0;
-    while(guard++<60){
-      var dates=getWkDatesOff(w);
-      var anyValid=false;
-      repeatDays.forEach(function(d){
-        var idx=DAYS.indexOf(d);
-        if(dates[idx]<=SUMMER_END){
-          anyValid=true;
-          var copy=Object.assign({},obj,{id:gid(),day:d,week:w});
-          schedule.sessions.push(copy);newCopies.push(copy);
-        }
-      });
-      if(!anyValid)break;
-      w++;
-    }
-  }
+  getRecurSelections().forEach(function(sel){
+    var copy=Object.assign({},obj,{id:gid(),day:sel.day,week:sel.week});
+    schedule.sessions.push(copy);newCopies.push(copy);
+  });
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
   if(wasPublished)notifyPublished([obj,prevSession].concat(newCopies),'updated');
 }
@@ -1661,25 +1691,10 @@ function saveSessWithStatus(forcedStatus){
   var newSessions=[obj];
   schedule.sessions.push(obj);
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newSessions.push(copy);}});
-  var summerOn=!!(document.getElementById('copy-summer')&&document.getElementById('copy-summer').classList.contains('selected'));
-  if(summerOn){
-    var repeatDays=[day].concat(getCopyDays());
-    var w=wkOff+1,guard=0;
-    while(guard++<60){
-      var dates=getWkDatesOff(w);
-      var anyValid=false;
-      repeatDays.forEach(function(d){
-        var idx=DAYS.indexOf(d);
-        if(dates[idx]<=SUMMER_END){
-          anyValid=true;
-          var copy=Object.assign({},obj,{id:gid(),day:d,week:w});
-          schedule.sessions.push(copy);newSessions.push(copy);
-        }
-      });
-      if(!anyValid)break;
-      w++;
-    }
-  }
+  getRecurSelections().forEach(function(sel){
+    var copy=Object.assign({},obj,{id:gid(),day:sel.day,week:sel.week});
+    schedule.sessions.push(copy);newSessions.push(copy);
+  });
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
   if(forcedStatus==='confirmed')notifyPublished(newSessions);
 }
