@@ -380,10 +380,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
         <span class="chip" id="recur-day-Saturday" onclick="togRecurDay(this)">Sat</span>
         <span class="chip" id="recur-day-Sunday" onclick="togRecurDay(this)">Sun</span>
       </div>
-      <div class="g2" style="margin-top:10px">
-        <div class="fr"><label style="font-size:11px;color:#666">Repeat until</label><input type="date" id="recur-until" onchange="buildRecurPreview()"></div>
-        <div class="fr"><label style="font-size:11px;color:#666">&nbsp;</label><button class="btn btn-sm" type="button" onclick="setRecurEndOfSummer()">Thru Aug 13 (end of summer)</button></div>
-      </div>
+      <div class="fr" style="margin-top:10px"><label style="font-size:11px;color:#666">Repeat until</label><input type="date" id="recur-until" onchange="buildRecurPreview()"></div>
       <div id="recur-preview" style="margin-top:10px;font-size:11px;color:#666">Pick at least one day and an end date to preview dates.</div>
     </div>
   </div>
@@ -1327,7 +1324,6 @@ function getCopyDays(){return DAYS.filter(function(d){var c=document.getElementB
 function clearCopy(){DAYS.forEach(function(d){var c=document.getElementById('copy-'+d);if(c)c.classList.remove('selected')});var a=document.getElementById('copy-all');if(a)a.classList.remove('selected');resetRecurUI()}
 
 // ── CUSTOM RECURRENCE ──────────────────────────────────
-var SUMMER_END_DEFAULT='2026-08-13';
 function toggleRecurUI(){
   var on=document.getElementById('recur-on').checked;
   document.getElementById('recur-body').style.display=on?'block':'none';
@@ -1340,7 +1336,6 @@ function toggleRecurUI(){
 }
 function togRecurDay(el){el.classList.toggle('selected');buildRecurPreview()}
 function getRecurDays(){return DAYS.filter(function(d){var c=document.getElementById('recur-day-'+d);return c&&c.classList.contains('selected')})}
-function setRecurEndOfSummer(){document.getElementById('recur-until').value=SUMMER_END_DEFAULT;buildRecurPreview()}
 function resetRecurUI(){
   document.getElementById('recur-on').checked=false;
   document.getElementById('recur-body').style.display='none';
