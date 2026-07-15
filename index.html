@@ -323,7 +323,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
 <div class="mo" id="mo-sess"><div class="modal">
   <div class="mtt" id="smtitle">Add session</div>
   <div id="smstatusbanner" style="display:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;margin-bottom:12px;text-align:center"></div>
-  <div class="fr"><label>Day</label><select id="smday" onchange="refHP();rebuildPickers();buildPlSel(document.getElementById('smpl').value);buildGP(Array.from(document.querySelectorAll('#smgp .chip.selected')).map(function(c){return c.dataset.pid}).filter(Boolean))"></select></div>
+  <div class="fr"><label>Day</label><select id="smday" onchange="refHP();rebuildPickers();buildPlSel(document.getElementById('smpl').value);buildGP(Array.from(document.querySelectorAll('#smgp .chip.selected')).map(function(c){return c.dataset.pid}).filter(Boolean));refreshSummerNote()"></select></div>
   <div class="g2">
     <div class="fr"><label>Start</label><select id="smst" onchange="autoEnd()"></select></div>
     <div class="fr"><label>End</label><select id="smet" onchange="refHP()"></select></div>
@@ -352,7 +352,7 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   </div>
   <div class="fr"><label>Filming <span style="font-size:11px;color:#666">(optional)</span></label><select id="smcon"><option value="">None</option></select></div>
   <div class="fr">
-    <label>Copy to other days this week <span style="font-size:11px;color:#666">(optional)</span></label>
+    <label>Also duplicate onto <span style="font-size:11px;color:#666">(optional)</span></label>
     <div class="copy-chips">
       <span class="chip" id="copy-Monday" onclick="togCopy(this)">Mon</span>
       <span class="chip" id="copy-Tuesday" onclick="togCopy(this)">Tue</span>
@@ -363,6 +363,13 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
       <span class="chip" id="copy-Sunday" onclick="togCopy(this)">Sun</span>
       <span class="chip" id="copy-all" onclick="togAllCopy(this)" style="border-color:#7ab8f0;color:#7ab8f0">All week</span>
     </div>
+  </div>
+  <div class="fr">
+    <label>Recurring <span style="font-size:11px;color:#666">(optional)</span></label>
+    <div class="copy-chips">
+      <span class="chip" id="copy-summer" onclick="togSummerCopy(this)" style="border-color:#f0b060;color:#f0b060">&#128257; Repeat weekly all summer (thru Aug 13)</span>
+    </div>
+    <div id="summer-copy-note" style="display:none;font-size:11px;color:#666;margin-top:5px"></div>
   </div>
   <div class="fr"><label>Location <span style="font-size:11px;color:#666">(gym / court)</span></label><input type="text" id="smloc" placeholder="e.g. Merrimack College"></div>
   <div id="smconf" style="padding:8px 10px;background:#2d0a0a;border-radius:8px;font-size:12px;color:#f07070;margin-top:8px;display:none"></div>
@@ -1301,7 +1308,32 @@ function togAllCopy(el){
   DAYS.forEach(function(d){if(d!==cur){var c=document.getElementById('copy-'+d);if(c){if(on)c.classList.add('selected');else c.classList.remove('selected');}}});
 }
 function getCopyDays(){return DAYS.filter(function(d){var c=document.getElementById('copy-'+d);return c&&c.classList.contains('selected')})}
-function clearCopy(){DAYS.forEach(function(d){var c=document.getElementById('copy-'+d);if(c)c.classList.remove('selected')});var a=document.getElementById('copy-all');if(a)a.classList.remove('selected')}
+function clearCopy(){DAYS.forEach(function(d){var c=document.getElementById('copy-'+d);if(c)c.classList.remove('selected')});var a=document.getElementById('copy-all');if(a)a.classList.remove('selected');var s=document.getElementById('copy-summer');if(s)s.classList.remove('selected');var n=document.getElementById('summer-copy-note');if(n)n.style.display='none'}
+
+// ── SUMMER RECURRENCE ──────────────────────────────────
+// Elevate Academy runs through August 13, 2026 — recurring sessions never get scheduled past that date.
+var SUMMER_END=new Date(2026,7,13,23,59,59);
+function togSummerCopy(el){
+  el.classList.toggle('selected');
+  refreshSummerNote();
+}
+function refreshSummerNote(){
+  var el=document.getElementById('copy-summer');var note=document.getElementById('summer-copy-note');
+  if(!el||!note)return;
+  if(el.classList.contains('selected')){
+    var lastWk=lastSummerWeekFor(document.getElementById('smday').value);
+    var weeksAdded=lastWk-wkOff;
+    note.style.display='block';
+    note.textContent=weeksAdded>0?('Will add this session on '+weeksAdded+' more week'+(weeksAdded!==1?'s':'')+', every '+document.getElementById('smday').value+' through Aug 13.'):'This is already the last week of summer — no additional weeks to add.';
+  } else {
+    note.style.display='none';
+  }
+}
+function lastSummerWeekFor(day){
+  var idx=DAYS.indexOf(day),w=wkOff;
+  while(getWkDatesOff(w+1)[idx]<=SUMMER_END){w++;if(w>60)break;}
+  return w;
+}
 
 function cNames(cid){return Array.from(document.querySelectorAll('#'+cid+' .chip.selected')).map(function(c){return c.textContent.trim()})}
 function coachNames(){return Array.from(document.querySelectorAll('#smcoach .chip.coach-sel')).map(function(c){return c.textContent.trim()})}
@@ -1411,6 +1443,25 @@ function saveSess(){
   else schedule.sessions.push(obj);
   var newCopies=[];
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newCopies.push(copy);}});
+  var summerOn=!!(document.getElementById('copy-summer')&&document.getElementById('copy-summer').classList.contains('selected'));
+  if(summerOn){
+    var repeatDays=[day].concat(getCopyDays());
+    var w=wkOff+1,guard=0;
+    while(guard++<60){
+      var dates=getWkDatesOff(w);
+      var anyValid=false;
+      repeatDays.forEach(function(d){
+        var idx=DAYS.indexOf(d);
+        if(dates[idx]<=SUMMER_END){
+          anyValid=true;
+          var copy=Object.assign({},obj,{id:gid(),day:d,week:w});
+          schedule.sessions.push(copy);newCopies.push(copy);
+        }
+      });
+      if(!anyValid)break;
+      w++;
+    }
+  }
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
   if(wasPublished)notifyPublished([obj,prevSession].concat(newCopies),'updated');
 }
@@ -1610,6 +1661,25 @@ function saveSessWithStatus(forcedStatus){
   var newSessions=[obj];
   schedule.sessions.push(obj);
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newSessions.push(copy);}});
+  var summerOn=!!(document.getElementById('copy-summer')&&document.getElementById('copy-summer').classList.contains('selected'));
+  if(summerOn){
+    var repeatDays=[day].concat(getCopyDays());
+    var w=wkOff+1,guard=0;
+    while(guard++<60){
+      var dates=getWkDatesOff(w);
+      var anyValid=false;
+      repeatDays.forEach(function(d){
+        var idx=DAYS.indexOf(d);
+        if(dates[idx]<=SUMMER_END){
+          anyValid=true;
+          var copy=Object.assign({},obj,{id:gid(),day:d,week:w});
+          schedule.sessions.push(copy);newSessions.push(copy);
+        }
+      });
+      if(!anyValid)break;
+      w++;
+    }
+  }
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
   if(forcedStatus==='confirmed')notifyPublished(newSessions);
 }
