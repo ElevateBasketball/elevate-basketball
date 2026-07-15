@@ -80,10 +80,13 @@ input:focus,select:focus{border-color:#60c070}
 .time-hint{font-size:11px;color:#666;margin-top:4px}
 .saved-flash{font-size:12px;color:#60c070;text-align:center;margin-top:8px;min-height:16px}
 .divider{height:1px;background:#2e2e2e;margin:14px 0}
+.back{display:inline-flex;align-items:center;gap:6px;color:#666;font-size:13px;text-decoration:none;margin-bottom:1rem;transition:color 0.15s}
+.back:hover{color:#e8e8e8}
 </style>
 </head>
 <body>
 <div class="app">
+<a class="back" href="portal.html">&#8592; Back to portal</a>
 <div class="header">
   <div class="logo">🏀</div>
   <div class="title"><span>Elevate</span> Basketball</div>
@@ -593,48 +596,28 @@ async function saveAvail(){
 function renderInvoices(){
   var el=document.getElementById('tab-invoices');
   var player=state.players.find(function(p){return p.id===selPlayer});if(!player){el.innerHTML='';return;}
-  var HOURLY=20;
-  var allS=state.sessions.filter(function(s){return s.player===player.name&&s.status!=='draft'&&s.status!=='cancelled';});
-  if(!allS.length){el.innerHTML='<div class="card" style="text-align:center;padding:2rem;color:#666">No sessions recorded yet.</div>';return;}
-  var weeks=allS.map(function(s){return s.week||0});
-  var minWk=Math.min.apply(null,weeks);var maxWk=Math.max.apply(null,weeks);
-  var periods=[];
-  for(var pw=minWk;pw<=maxWk;pw+=2){
-    var w1=pw,w2=pw+1;
-    var ps=allS.filter(function(s){return s.week===w1||s.week===w2;});
-    if(!ps.length)continue;
-    var mins=ps.reduce(function(a,s){return a+t2m(s.end)-t2m(s.start);},0);
-    var hrs=parseFloat((mins/60).toFixed(2));var amt=Math.round(hrs*HOURLY);
-    var d1=getWkDatesFor(w1)[0];var d2=getWkDatesFor(w2)[5];
-    var status=(state.payPeriodStatus&&state.payPeriodStatus['period-'+w1])||'pending';
-    periods.push({w1:w1,w2:w2,sessions:ps,hrs:hrs,amount:amt,d1:d1,d2:d2,status:status});
-  }
-  periods.reverse();
-  var totalOwed=periods.filter(function(p){return p.status!=='paid';}).reduce(function(a,p){return a+p.amount;},0);
-  var totalPaid=periods.filter(function(p){return p.status==='paid';}).reduce(function(a,p){return a+p.amount;},0);
-  var html='<div class="card" style="margin-bottom:1rem"><div style="font-size:13px;color:#999;margin-bottom:12px">Rate: $'+HOURLY+'/hr</div>'
-    +'<div style="display:flex;gap:10px">'
-    +'<div style="flex:1;background:#0a2010;border:1px solid #1a5a25;border-radius:10px;padding:12px;text-align:center"><div style="font-size:11px;color:#999;margin-bottom:4px">Total paid</div><div style="font-size:22px;font-weight:700;color:#60c070">$'+totalPaid+'</div></div>'
-    +'<div style="flex:1;background:#2d0a0a;border:1px solid #7a1a1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:11px;color:#999;margin-bottom:4px">Balance due</div><div style="font-size:22px;font-weight:700;color:#f07070">$'+totalOwed+'</div></div>'
+  var mine=(state.invoices||[]).filter(function(inv){return inv.playerId===player.id||inv.playerName===player.name;});
+  if(!mine.length){el.innerHTML='<div class="card" style="text-align:center;padding:2rem;color:#666">No invoices yet.</div>';return;}
+  mine=mine.slice().sort(function(a,b){return new Date(b.createdAt||0)-new Date(a.createdAt||0);});
+  var totalPaid=mine.filter(function(i){return i.status==='paid';}).reduce(function(a,i){return a+i.amount;},0);
+  var totalOwed=mine.filter(function(i){return i.status==='sent';}).reduce(function(a,i){return a+i.amount;},0);
+  var html='<div class="card" style="margin-bottom:1rem"><div style="display:flex;gap:10px">'
+    +'<div style="flex:1;background:#0a2010;border:1px solid #1a5a25;border-radius:10px;padding:12px;text-align:center"><div style="font-size:11px;color:#999;margin-bottom:4px">Total paid</div><div style="font-size:22px;font-weight:700;color:#60c070">$'+totalPaid.toLocaleString()+'</div></div>'
+    +'<div style="flex:1;background:#2d0a0a;border:1px solid #7a1a1a;border-radius:10px;padding:12px;text-align:center"><div style="font-size:11px;color:#999;margin-bottom:4px">Balance due</div><div style="font-size:22px;font-weight:700;color:#f07070">$'+totalOwed.toLocaleString()+'</div></div>'
     +'</div></div>';
-  periods.forEach(function(p){
-    var isPaid=p.status==='paid';
+  mine.forEach(function(inv){
+    var isPaid=inv.status==='paid';var isTrack=inv.status==='track';
+    var statusColor=isPaid?'#60c070':isTrack?'#999':'#f07070';
+    var statusLabel=isPaid?'\u2713 Paid':isTrack?'Track only':'\u23F3 Awaiting payment';
+    var date=inv.createdAt?new Date(inv.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'\u2014';
+    var paidInfo=isPaid&&inv.paidMethod?' via '+inv.paidMethod:'';
     html+='<div class="card" style="margin-bottom:10px">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-      +'<div><div style="font-size:13px;font-weight:600">'+fmtD(p.d1)+' to '+fmtD(p.d2)+'</div>'
-      +'<div style="font-size:11px;color:#999;margin-top:2px">'+p.sessions.length+' sessions &middot; '+p.hrs.toFixed(1)+' hrs</div></div>'
-      +'<div style="text-align:right"><div style="font-size:20px;font-weight:700;color:'+(isPaid?'#60c070':'#f07070')+'">${'+p.amount+'}</div>'
-      +'<div style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;display:inline-block;'+(isPaid?'background:#0a2010;color:#60c070':'background:#2d0a0a;color:#f07070')+'">'+(isPaid?'Paid':'Due')+'</div>'
-      +'</div></div>'
-      +'<div style="border-top:1px solid #2e2e2e;padding-top:10px">';
-    p.sessions.sort(function(a,b){return(a.week||0)-(b.week||0)||DAYS.indexOf(a.day)-DAYS.indexOf(b.day);}).forEach(function(s){
-      var sPay=Math.round((t2m(s.end)-t2m(s.start))/60*HOURLY);
-      html+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222;font-size:12px">'
-        +'<div><span style="color:#e8e8e8">'+s.day+'</span>'
-        +'<span style="color:#999;margin-left:8px">'+fmtT(s.start)+'-'+fmtT(s.end)+'</span></div>'
-        +'<div style="color:#60c070;font-weight:500">$'+sPay+'</div></div>';
-    });
-    html+='</div></div>';
+      +'<div style="display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div style="font-size:13px;font-weight:600">'+(inv.description||'Invoice')+'</div>'
+      +'<div style="font-size:11px;color:#999;margin-top:2px">'+date+'</div></div>'
+      +'<div style="text-align:right"><div style="font-size:20px;font-weight:700;color:'+statusColor+'">$'+inv.amount.toLocaleString()+'</div>'
+      +'<div style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;display:inline-block;'+(isPaid?'background:#0a2010;color:#60c070':isTrack?'background:#1a1a1a;color:#999':'background:#2d0a0a;color:#f07070')+'">'+statusLabel+paidInfo+'</div>'
+      +'</div></div></div>';
   });
   el.innerHTML=html;
 }
@@ -676,11 +659,17 @@ setInterval(async function(){
   try{
     var r=await fetch(SBU+'/rest/v1/state?id=eq.main&select=data',{headers:HDR});
     var rows=await r.json();
-    if(rows.length&&rows[0].data&&rows[0].data.state){
-      var s=rows[0].data.state;
-      state.players=s.players||[];state.sessions=s.sessions||[];
-      state.locations=s.locations||{};state.dayNotes=s.dayNotes||{};state.playerAvail=s.playerAvail||{};
-      buildPlayerSelect();if(activeTab==='sessions')renderSessions();
+    if(rows.length&&rows[0].data){
+      var d=rows[0].data;var s=d.state||d;
+      state.players=(Array.isArray(d.players)&&d.players.length>0)?d.players:(s.players||[]);
+      state.sessions=(Array.isArray(d.sessions)&&d.sessions.length>0)?d.sessions:(s.sessions||[]);
+      state.locations=d.locations||s.locations||{};
+      state.dayNotes=d.dayNotes||s.dayNotes||{};
+      state.playerAvail=d.playerAvail||s.playerAvail||{};
+      state.invoices=Array.isArray(d.invoices)?d.invoices:(state.invoices||[]);
+      buildPlayerSelect();
+      if(activeTab==='sessions')renderSessions();
+      else if(activeTab==='invoices')renderInvoices();
     }
   }catch(e){}
 },60000);

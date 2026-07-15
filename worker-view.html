@@ -75,10 +75,13 @@ input,select,textarea{width:100%;font-family:inherit;font-size:14px;background:#
 .time-row select{margin-bottom:0;font-size:13px;flex:1}
 .saved-flash{font-size:12px;color:#60c070;text-align:center;margin-top:8px;min-height:16px}
 .divider{height:1px;background:#2e2e2e;margin:14px 0}
+.back{display:inline-flex;align-items:center;gap:6px;color:#666;font-size:13px;text-decoration:none;margin-bottom:1rem;transition:color 0.15s}
+.back:hover{color:#e8e8e8}
 </style>
 </head>
 <body>
 <div class="app">
+<a class="back" href="portal.html">&#8592; Back to portal</a>
 <div class="header">
   <div class="logo">&#127936;</div>
   <div class="title"><span>Elevate</span> Basketball</div>
@@ -134,7 +137,9 @@ var SBU='https://vjnanbggseohhpdrcblq.supabase.co';
 var SBK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqbmFuYmdnc2VvaGhwZHJjYmxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NTAzNzIsImV4cCI6MjA5NjAyNjM3Mn0.MfqBhb7hiuYZADLfTYMl6gRo59BClfFvij_6imafqcQ';
 var HDR={'apikey':SBK,'Authorization':'Bearer '+SBK,'Content-Type':'application/json'};
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-var HOURLY=20;
+function workerType(w){return w.workerType||(w.isIntern?'intern':'standard');}
+function workerRate(w){var t=workerType(w);if(t==='hourly')return 15;if(t==='intern'||t==='salary')return 0;return 20;}
+function payExcluded(w){var t=workerType(w);return !!w.isCoach||t==='intern'||t==='salary';}
 var wkOff=0;
 var currentWkOff=0;
 var activeTab='avail';
@@ -327,18 +332,19 @@ function renderShifts(){
     .sort(function(a,b){return DAYS.indexOf(a.day)-DAYS.indexOf(b.day)||t2m(a.start)-t2m(b.start)});
   var totalMins=myShifts.reduce(function(a,s){return a+t2m(s.end)-t2m(s.start)},0);
   var totalHrs=parseFloat((totalMins/60).toFixed(2));
-  var totalPay=Math.round(totalHrs*HOURLY);
+  var showPay=!payExcluded(worker);
+  var totalPay=Math.round(totalHrs*workerRate(worker));
   var dates=getWkDates();
   var byDay={};DAYS.forEach(function(d){byDay[d]=[]});
   myShifts.forEach(function(s){if(byDay[s.day])byDay[s.day].push(s)});
 
   var html='<div class="card">';
   html+='<div class="worker-header">'
-    +'<div class="avatar'+(worker.role==='content'?' ct':'')+'">'+ini(worker.name)+'</div>'
+    +'<div class="avatar'+(worker.isContentTeam?' ct':'')+'">'+ini(worker.name)+'</div>'
     +'<div><div class="wname">'+worker.name+'</div><div class="winfo">'
     ''
     +'</div></div>'
-    +'<div class="wstats"><div class="whrs">'+totalHrs.toFixed(1)+' hrs</div><div class="wpay">$'+totalPay+'</div></div>'
+    +'<div class="wstats"><div class="whrs">'+totalHrs.toFixed(1)+' hrs</div>'+(showPay?'<div class="wpay">$'+totalPay+'</div>':'')+'</div>'
     +'</div>';
 
   // Day pills grid
@@ -365,7 +371,7 @@ function renderShifts(){
     html+='<div style="display:flex;gap:1rem;margin-bottom:14px;padding:10px;background:#222;border-radius:8px">'
       +'<div style="flex:1;text-align:center"><div style="font-size:11px;color:#999">Shifts</div><div style="font-size:18px;font-weight:600">'+myShifts.length+'</div></div>'
       +'<div style="flex:1;text-align:center"><div style="font-size:11px;color:#999">Hours</div><div style="font-size:18px;font-weight:600">'+totalHrs.toFixed(1)+'</div></div>'
-      +'<div style="flex:1;text-align:center"><div style="font-size:11px;color:#999">Pay</div><div style="font-size:18px;font-weight:600;color:#60c070">$'+totalPay+'</div></div>'
+      +(showPay?'<div style="flex:1;text-align:center"><div style="font-size:11px;color:#999">Pay</div><div style="font-size:18px;font-weight:600;color:#60c070">$'+totalPay+'</div></div>':'')
       +'</div>';
 
     DAYS.forEach(function(day,di){
@@ -378,7 +384,7 @@ function renderShifts(){
       ds.forEach(function(s){
         var isContent=s.contentWorker===selWorker;
         var dur=((t2m(s.end)-t2m(s.start))/60).toFixed(1);
-        var pay=Math.round((t2m(s.end)-t2m(s.start))/60*HOURLY);
+        var pay=Math.round((t2m(s.end)-t2m(s.start))/60*workerRate(worker));
         var coworkers=(s.workers||[]).filter(function(id){return id!==selWorker}).map(function(id){var w=state.workers.find(function(x){return x.id===id});return w?w.name:''}).filter(Boolean);
         if(!isContent&&s.contentWorker){var cw=state.workers.find(function(w){return w.id===s.contentWorker});if(cw)coworkers.push(cw.name+' (film)')}
         var note=state.dayNotes[day+'-'+wkOff]||'';
@@ -388,7 +394,7 @@ function renderShifts(){
           +'<div style="font-size:16px;font-weight:600">'+(s.player||'Session')+(s.type==='group'?' (group)':'')+'</div>'
           +'<div style="text-align:right">'
           +'<div style="font-size:14px;font-weight:600">'+fmtT(s.start)+' - '+fmtT(s.end)+'</div>'
-          +'<div style="font-size:13px;color:#60c070;font-weight:500">$'+pay+'</div>'
+          +(showPay?'<div style="font-size:13px;color:#60c070;font-weight:500">$'+pay+'</div>':'')
           +'</div></div>';
         html+='<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#aaa;margin-bottom:6px">'
           +'<span>Hoop '+(s.hoop==='pro'?'Pro group':s.hoop)+'</span>'
@@ -534,6 +540,12 @@ async function saveAvail(){
 function renderPayHistory(){
   var el=document.getElementById('tab-pay');
   var worker=state.workers.find(function(w){return w.id===selWorker});if(!worker){el.innerHTML='';return;}
+  if(payExcluded(worker)){
+    var reason=workerType(worker)==='intern'?'Interns are on a stipend and aren\'t tracked in Worker Pay.':workerType(worker)==='salary'?'Salaried staff aren\'t tracked in Worker Pay.':'Coaches aren\'t tracked in Worker Pay.';
+    el.innerHTML='<div class="card" style="text-align:center;padding:2rem;color:#999"><div style="font-size:28px;margin-bottom:10px">&#128203;</div><div style="font-size:14px;font-weight:500;color:#e8e8e8;margin-bottom:6px">No pay tracking for your role</div><div style="font-size:12px;color:#777">'+reason+'</div></div>';
+    return;
+  }
+  var rate=workerRate(worker);
   var allS=state.sessions.filter(function(s){return (s.workers||[]).indexOf(selWorker)>=0||s.contentWorker===selWorker;});
   if(!allS.length){el.innerHTML='<div class="card" style="text-align:center;padding:2rem;color:#666">No sessions recorded yet.</div>';return;}
   var weeks=allS.map(function(s){return s.week||0});
@@ -544,9 +556,9 @@ function renderPayHistory(){
     var ps=allS.filter(function(s){return s.week===w1||s.week===w2;});
     if(!ps.length)continue;
     var mins=ps.reduce(function(a,s){return a+t2m(s.end)-t2m(s.start);},0);
-    var hrs=parseFloat((mins/60).toFixed(2));var pay=Math.round(hrs*HOURLY);
+    var hrs=parseFloat((mins/60).toFixed(2));var pay=Math.round(hrs*rate);
     var d1=getWkDatesFor(w1)[0];var d2=getWkDatesFor(w2)[5];
-    var status=(state.payPeriodStatus&&state.payPeriodStatus['period-'+w1])||'pending';
+    var status=(state.payPeriodStatus&&state.payPeriodStatus[selWorker+'-period-'+w1])||'pending';
     periods.push({w1:w1,w2:w2,sessions:ps,hrs:hrs,pay:pay,d1:d1,d2:d2,status:status});
   }
   periods.reverse();
@@ -568,7 +580,7 @@ function renderPayHistory(){
       +'<div style="border-top:1px solid #2e2e2e;padding-top:10px">';
     p.sessions.sort(function(a,b){return(a.week||0)-(b.week||0)||DAYS.indexOf(a.day)-DAYS.indexOf(b.day);}).forEach(function(s){
       var dur=((t2m(s.end)-t2m(s.start))/60).toFixed(1);
-      var sPay=Math.round((t2m(s.end)-t2m(s.start))/60*HOURLY);
+      var sPay=Math.round((t2m(s.end)-t2m(s.start))/60*rate);
       html+='<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222;font-size:12px">'
         +'<div><span style="color:#e8e8e8">'+s.day+'</span>'
         +(s.player?'<span style="color:#7ab8f0;margin-left:8px">'+s.player+'</span>':'')
