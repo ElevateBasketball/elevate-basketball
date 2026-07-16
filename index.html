@@ -341,6 +341,12 @@ input,select,textarea{width:100%;font-family:inherit;font-size:13px;background:#
   </div>
   <div class="fr" id="smgpr" style="display:none"><label>Players in group</label><div id="smgp" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;max-height:90px;overflow-y:auto"></div></div>
   <div class="fr" id="smgnr" style="display:none"><label>Group / session name</label><input type="text" id="smgn" placeholder="e.g. Pro Group, Monday Elite..."></div>
+  <div class="fr" id="smbulkr" style="display:none;background:#181818;border:1px solid #2e2e2e;border-radius:8px;padding:10px 12px">
+    <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-bottom:0">
+      <input type="checkbox" id="smbulk" style="width:auto;margin-top:2px">
+      <span style="font-size:12px;color:#ccc">Apply these changes to <span id="smbulklabel" style="color:#e8e8e8;font-weight:600">this group</span>'s other sessions this week too <span style="color:#666">(roster, coaches, workers, filming, location — not day/time)</span></span>
+    </label>
+  </div>
 
   <div class="fr">
     <label>Coaches <span style="font-size:11px;color:#666">(lead the workout, up to 2)</span></label>
@@ -538,7 +544,7 @@ var COACH_PW='BigKahuna13!';  // change here only
 var INV_PW='TwistiesWithSprinkles';  // change here only
 var HDR={'apikey':SBK,'Authorization':'Bearer '+SBK,'Content-Type':'application/json'};
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-var wkOff=0,calView='schedule',eSessId=null,ePlaId=null,eWorId=null,dnTgt=null,sHoop='1',dragSessId=null,dragGhostEl=null;
+var wkOff=0,calView='schedule',eSessId=null,ePlaId=null,eWorId=null,dnTgt=null,sHoop='1',dragSessId=null,dragGhostEl=null,eGroupOrig=null;
 var workers=[];
 var players=[];
 var invoices=[];
@@ -1379,7 +1385,7 @@ function cNames(cid){return Array.from(document.querySelectorAll('#'+cid+' .chip
 function coachNames(){return Array.from(document.querySelectorAll('#smcoach .chip.coach-sel')).map(function(c){return c.textContent.trim()})}
 
 function openAS(day,hoop){
-  eSessId=null;sHoop=hoop||'1';buildTS();buildDS();
+  eSessId=null;eGroupOrig=null;sHoop=hoop||'1';buildTS();buildDS();
   if(day)document.getElementById('smday').value=day;
   renderHP(new Set());
   buildCoaches([]);buildWC([]);buildCS('');buildGP([]);buildPlSel('');
@@ -1389,6 +1395,8 @@ function openAS(day,hoop){
   document.getElementById('smconf').style.display='none';document.getElementById('smtitle').textContent='Add session';
   document.getElementById('smdel').style.display='none';document.getElementById('smgpr').style.display='none';
   document.getElementById('smindpr').style.display='block';
+  if(document.getElementById('smbulkr'))document.getElementById('smbulkr').style.display='none';
+  if(document.getElementById('smbulk'))document.getElementById('smbulk').checked=false;
   clearCopy();refHP();
   document.getElementById('smpub').style.display='none';
   document.getElementById('smunpub').style.display='none';
@@ -1417,6 +1425,18 @@ function openES(id){
   document.getElementById('smgpr').style.display=s.type==='group'?'block':'none';
   if(document.getElementById('smgnr'))document.getElementById('smgnr').style.display=isGrpE?'block':'none';
   document.getElementById('smindpr').style.display=isGrpE?'none':'block';
+  eGroupOrig=isGrpE?{type:s.type,name:s.player}:null;
+  var bulkr=document.getElementById('smbulkr');
+  if(bulkr){
+    var siblingCount=isGrpE?schedule.sessions.filter(function(x){return x.id!==s.id&&x.week===wkOff&&x.type===s.type&&x.player===s.player}).length:0;
+    if(isGrpE&&siblingCount>0){
+      document.getElementById('smbulklabel').textContent=s.player||'this group';
+      bulkr.style.display='block';
+    } else {
+      bulkr.style.display='none';
+    }
+  }
+  if(document.getElementById('smbulk'))document.getElementById('smbulk').checked=false;
   clearCopy();refHP();
   buildConfList(s);
   var isDraftSess=!s.status||s.status==='draft';
@@ -1435,7 +1455,7 @@ function openES(id){
   openMo('mo-sess');
 }
 
-function saveSess(){
+function saveSess(forceStatus){
   var day=document.getElementById('smday').value;var start=document.getElementById('smst').value;var end=document.getElementById('smet').value;
   if(t2m(end)<=t2m(start)){shConf('End time must be after start time.');return}
   var bk=bkHoops(day,start,end,eSessId);if(bk.has(sHoop)){shConf('That hoop is already booked.');return}
@@ -1475,11 +1495,13 @@ function saveSess(){
   }
 
   var focus='';
+  var status=forceStatus||(prevSession?prevSession.status:'draft');
   var obj={id:eSessId||gid(),day:day,start:start,end:end,
     player:(type==='group'||type==='pro')?document.getElementById('smgn').value.trim()||'Group':document.getElementById('smpl').value.trim(),
-    hoop:sHoop,type:type,status:eSessId?(schedule.sessions.find(function(x){return x.id===eSessId})||{status:'draft'}).status:'draft',location:document.getElementById('smloc').value.trim(),
+    hoop:sHoop,type:type,status:status,location:document.getElementById('smloc').value.trim(),
     coaches:sc,workers:sw,contentWorker:document.getElementById('smcon').value,focus:focus,groupPlayers:gp,week:wkOff};
-  if(eSessId){var i=schedule.sessions.findIndex(function(s){return s.id===eSessId});var ex=schedule.sessions[i];obj.confirmations=ex.confirmations||[];obj.workerConfirmations=ex.workerConfirmations||[];schedule.sessions[i]=obj}
+  if(status==='confirmed'){obj.publishedAt=wasPublished?prevSession.publishedAt:new Date().toISOString();}
+  if(eSessId){var i=schedule.sessions.findIndex(function(s){return s.id===eSessId});var ex=schedule.sessions[i];obj.confirmations=ex.confirmations||[];obj.workerConfirmations=ex.workerConfirmations||[];obj.icsSeq=ex.icsSeq;schedule.sessions[i]=obj}
   else schedule.sessions.push(obj);
   var newCopies=[];
   getCopyDays().forEach(function(d){if(d!==day){var copy=Object.assign({},obj,{id:gid(),day:d});schedule.sessions.push(copy);newCopies.push(copy);}});
@@ -1487,8 +1509,32 @@ function saveSess(){
     var copy=Object.assign({},obj,{id:gid(),day:sel.day,week:sel.week});
     schedule.sessions.push(copy);newCopies.push(copy);
   });
+
+  // Bulk-apply: push the edited content fields (not day/start/end/hoop/status)
+  // onto this group's other sessions in the same week.
+  var bulkSiblingsUpdated=[];
+  var bulkChk=document.getElementById('smbulk');
+  if(bulkChk&&bulkChk.checked&&eGroupOrig){
+    schedule.sessions.forEach(function(sib){
+      if(sib.id===obj.id)return;
+      if(sib.week!==wkOff)return;
+      if(sib.type!==eGroupOrig.type||sib.player!==eGroupOrig.name)return;
+      sib.player=obj.player;sib.type=obj.type;sib.location=obj.location;
+      sib.coaches=obj.coaches.slice();sib.workers=obj.workers.slice();
+      sib.contentWorker=obj.contentWorker;sib.groupPlayers=obj.groupPlayers.slice();sib.focus=obj.focus;
+      if(sib.status==='confirmed')bulkSiblingsUpdated.push(sib);
+    });
+  }
+
   clearCopy();queueSave();closeMo('mo-sess');renderCal();
-  if(wasPublished)notifyPublished([obj,prevSession].concat(newCopies),'updated');
+  if(status==='confirmed'){
+    // Publishing (or re-publishing an edit) always sends the CURRENT field values,
+    // whether or not the session was previously published.
+    notifyPublished([obj].concat(wasPublished?[prevSession]:[]).concat(newCopies), wasPublished?'updated':undefined);
+  } else if(wasPublished){
+    notifyPublished([obj,prevSession].concat(newCopies),'updated');
+  }
+  if(bulkSiblingsUpdated.length)notifyPublished(bulkSiblingsUpdated,'updated');
 }
 
 function delSess(){schedule.sessions=schedule.sessions.filter(function(s){return s.id!==eSessId});queueSave();closeMo('mo-sess');renderCal()}
@@ -1659,14 +1705,9 @@ function publishSess(){
     saveSessWithStatus('confirmed');
     return;
   }
-  var s=schedule.sessions.find(function(x){return x.id===eSessId});
-  if(!s)return;
-  s.status='confirmed';
-  s.publishedAt=new Date().toISOString();
-  queueSave();
-  notifyPublished([s]);
-  closeMo('mo-sess');
-  renderCal();
+  // Re-read whatever is currently in the form (including any unsaved edits)
+  // and publish THAT, instead of the stale object already in schedule.sessions.
+  saveSess('confirmed');
 }
 
 function saveSessWithStatus(forcedStatus){
