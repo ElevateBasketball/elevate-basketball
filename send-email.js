@@ -1,7 +1,8 @@
-const RESEND_KEY = 're_i9673958_KxnSS1vbWDasnx19yUH3QKSi';
+const RESEND_KEY = process.env.RESEND_API_KEY;
 
 export default async function handler(req, res) {
   if(req.method !== 'POST') return res.status(405).json({error:'Method not allowed'});
+  if(!RESEND_KEY) return res.status(500).json({error:'RESEND_API_KEY is not configured'});
   try {
     var payload = req.body||{};
     if(typeof payload==='string') payload=JSON.parse(payload);
