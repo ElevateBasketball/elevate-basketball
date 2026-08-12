@@ -773,12 +773,14 @@ function renderCal(){
 
     // Dynamic time range from all sessions this week
     var allTimes=ws.map(function(s){return [t2m(s.start),t2m(s.end)]});
-    var DEFAULT_START=6*60; // 6:00am fixed baseline
-    var DEFAULT_END=21*60; // 9:00pm fixed baseline
+    var DEFAULT_START=8*60; // 8:00am baseline start
+    var DEFAULT_END=21*60; // 9:00pm fixed baseline for scrollable range
     var minT=allTimes.length?Math.min.apply(null,allTimes.map(function(x){return x[0]})):DEFAULT_START;
     var maxT=allTimes.length?Math.max.apply(null,allTimes.map(function(x){return x[1]})):DEFAULT_END;
-    var TSTART=Math.max(0,Math.min(DEFAULT_START,minT-30)); // 30min buffer before first session, but never later than 6am
-    var TEND=Math.min(24*60,Math.max(DEFAULT_END,maxT+30)); // 30min buffer after last session, but never earlier than 9pm
+    // Grid opens right at 8am, or earlier if a workout starts before 8am — small 15min buffer only, so the first session is visible without scrolling
+    var TSTART=Math.max(0,Math.min(DEFAULT_START,minT-15));
+    // End of range stays generous so later hours remain reachable by scrolling
+    var TEND=Math.min(24*60,Math.max(DEFAULT_END,maxT+30));
     var PXM=isOverview?0.9:1.8; // pixels per minute
     var GHEIGHT=Math.round((TEND-TSTART)*PXM);
     var MAX_H=isOverview?9999:520; // Overview: no scroll cap; Schedule: max 520px
