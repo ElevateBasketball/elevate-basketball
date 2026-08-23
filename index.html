@@ -545,7 +545,7 @@ var INV_PW='TwistiesWithSprinkles';  // change here only
 var HDR={'apikey':SBK,'Authorization':'Bearer '+SBK,'Content-Type':'application/json'};
 var DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 var wkOff=0,calView='schedule',eSessId=null,ePlaId=null,eWorId=null,dnTgt=null,sHoop='1',dragSessId=null,dragGhostEl=null,eGroupOrig=null;
-var dragPointerId=null,dragStartX=0,dragStartY=0,dragStarted=false,dragEl=null,dragOffsetY=0,suppressNextClick=false;
+var dragPointerId=null,dragStartX=0,dragStartY=0,dragStarted=false,dragEl=null,dragOffsetX=0,dragOffsetY=0,suppressNextClick=false,dragFloatEl=null;
 var workers=[];
 var players=[];
 var invoices=[];
@@ -929,10 +929,12 @@ function renderCal(){
   var DRAG_THRESHOLD=3; // px — small on purpose so drags feel instant/sensitive
   var DRAG_EDGE=48; // px from top/bottom of the day column that triggers auto-scroll
   function clearDragGhost(){if(dragGhostEl&&dragGhostEl.parentElement)dragGhostEl.parentElement.removeChild(dragGhostEl);dragGhostEl=null;}
+  function clearDragFloat(){if(dragFloatEl&&dragFloatEl.parentElement)dragFloatEl.parentElement.removeChild(dragFloatEl);dragFloatEl=null;}
   function dragCleanup(){
-    if(dragEl)dragEl.style.opacity='';
+    if(dragEl)dragEl.style.visibility='';
     grid.querySelectorAll('[data-drag-hover="1"]').forEach(function(el){el.removeAttribute('data-drag-hover');el.style.background='';});
     clearDragGhost();
+    clearDragFloat();
     dragPointerId=null;dragStarted=false;dragEl=null;dragSessId=null;
   }
   function dragComputeTarget(bodyEl,clientX,clientY){
@@ -963,7 +965,9 @@ function renderCal(){
     dragPointerId=e.pointerId;
     dragStartX=e.clientX;dragStartY=e.clientY;
     dragStarted=false;dragEl=sb;
-    dragOffsetY=e.clientY-sb.getBoundingClientRect().top;
+    var sbRect=sb.getBoundingClientRect();
+    dragOffsetX=e.clientX-sbRect.left;
+    dragOffsetY=e.clientY-sbRect.top;
   });
   grid.addEventListener('pointermove',function(e){
     if(dragPointerId===null||e.pointerId!==dragPointerId)return;
@@ -971,7 +975,29 @@ function renderCal(){
       if(Math.abs(e.clientX-dragStartX)<DRAG_THRESHOLD&&Math.abs(e.clientY-dragStartY)<DRAG_THRESHOLD)return;
       dragStarted=true;suppressNextClick=true;
       try{grid.setPointerCapture(dragPointerId);}catch(err){}
-      if(dragEl)dragEl.style.opacity='0.4';
+      if(dragEl){
+        var r=dragEl.getBoundingClientRect();
+        dragFloatEl=dragEl.cloneNode(true);
+        dragFloatEl.removeAttribute('data-drag-sess');
+        dragFloatEl.style.position='fixed';
+        dragFloatEl.style.left=r.left+'px';
+        dragFloatEl.style.top=r.top+'px';
+        dragFloatEl.style.width=r.width+'px';
+        dragFloatEl.style.height=r.height+'px';
+        dragFloatEl.style.margin='0';
+        dragFloatEl.style.zIndex='9999';
+        dragFloatEl.style.pointerEvents='none';
+        dragFloatEl.style.boxShadow='0 8px 24px rgba(0,0,0,0.5)';
+        dragFloatEl.style.cursor='grabbing';
+        dragFloatEl.style.opacity='0.95';
+        document.body.appendChild(dragFloatEl);
+        dragEl.style.visibility='hidden';
+      }
+    }
+    // Floating card tracks the pointer 1:1, at the same spot within it that was grabbed
+    if(dragFloatEl){
+      dragFloatEl.style.left=(e.clientX-dragOffsetX)+'px';
+      dragFloatEl.style.top=(e.clientY-dragOffsetY)+'px';
     }
     e.preventDefault();
     var bodyEl=document.elementFromPoint(e.clientX,e.clientY);
